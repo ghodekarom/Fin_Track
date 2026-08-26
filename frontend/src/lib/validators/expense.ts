@@ -8,7 +8,13 @@ export const expenseSchema = z.object({
     .refine((val) => val.trim().length > 0, "Title cannot be empty or whitespace only"),
   category_id: z
     .string()
-    .uuid("Please select a valid category"),
+    .min(1, "Please select a valid category")
+    .refine((val) => {
+      if (val === "NEW_CATEGORY") return true;
+      // Standard UUID regex check
+      const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      return uuidRegex.test(val);
+    }, "Please select a valid category"),
   amount: z
     .union([z.number(), z.string()])
     .transform((val) => {
