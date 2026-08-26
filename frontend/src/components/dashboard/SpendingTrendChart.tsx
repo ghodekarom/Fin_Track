@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { SpendingTrend } from "../../lib/queries/dashboard";
 import { formatCurrency } from "../../lib/utils/currency";
 import { EmptyState } from "../ui/EmptyState";
@@ -85,7 +85,13 @@ export function SpendingTrendChart({
 
       <div className="flex-1 min-h-0 relative mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
             <XAxis
               dataKey="dateDisplay"
@@ -103,12 +109,15 @@ export function SpendingTrendChart({
               dx={-5}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Bar
+            <Area
+              type="monotone"
               dataKey="Amount"
-              fill="#10b981"
-              radius={[4, 4, 0, 0]}
+              stroke="#10b981"
+              strokeWidth={2}
+              fillOpacity={1}
+              fill="url(#colorAmount)"
             />
-          </BarChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>

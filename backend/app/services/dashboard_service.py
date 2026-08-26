@@ -144,10 +144,8 @@ async def get_comparison(db: AsyncSession) -> dict:
         percentage_change = Decimal("100.00") if current_spent > Decimal("0.00") else Decimal("0.00")
 
     return {
-        "current_month": current_month_start.strftime("%B"),
-        "current_spent": current_spent,
-        "previous_month": prev_month_start.strftime("%B"),
-        "previous_spent": prev_spent,
+        "current_month_spent": current_spent,
+        "previous_month_spent": prev_spent,
         "percentage_change": percentage_change,
     }
 
@@ -209,3 +207,37 @@ async def get_average_spend(db: AsyncSession, basis: str) -> dict:
         "days_elapsed": days_elapsed,
         "current_month_spent": current_spent,
     }
+
+
+async def get_payment_mode_breakdown(
+    db: AsyncSession, date_from: date | None = None, date_to: date | None = None
+) -> list[dict]:
+    """Retrieve spending grouped by payment mode."""
+    query = select(
+        Expense.payment_mode.label("payment_mode"),
+        func.sum(Expense.amount).label("total_spent"),
+    ).where(Expense.payment_mode.isnot(None))
+
+    if date_from:
+        query = query.where(Expense.expense_date >= date_from)
+    if date_to:
+        query = query.where(Expense.expense_date <= date_to)
+
+    query = query.group_by(Expense.payment_mode).order_by(
+        func.sum(Expense.amount).desc()
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    # Calculate grand total to derive percentages
+    grand_total = sum((row.total_spent or Decimal("0.00")) for row in rows)
+
+    return [
+        {
+            "payment_mode": row.payment_mode,
+            "total_spent": row.total_spent or Decimal("0.00"),
+            "percentage": float(round(((row.total_spent or Decimal("0.00")) / grand_total) * 100, 2)) if grand_total > 0 else 0.0,
+        }
+        for row in rows
+    ]

@@ -71,13 +71,15 @@ async def test_top_categories_and_averages(
         title="Office Lunch",
         category_id=cat1.id,
         amount=150.00,
-        expense_date=date(2026, 8, 20),
+        expense_date=date.today(),
+        payment_mode="card",
     )
     e2 = Expense(
         title="Bus pass",
         category_id=cat2.id,
         amount=50.00,
-        expense_date=date(2026, 8, 21),
+        expense_date=date.today(),
+        payment_mode="upi",
     )
     db_session.add_all([e1, e2])
     await db_session.commit()
@@ -95,3 +97,27 @@ async def test_top_categories_and_averages(
     avg_data = avg_response.json()
     assert "average_spent" in avg_data
     assert float(avg_data["current_month_spent"]) == 200.00
+
+    # MoM Comparison check
+    mom_response = await client.get("/api/dashboard/comparison")
+    assert mom_response.status_code == 200
+    mom_data = mom_response.json()
+    assert "current_month_spent" in mom_data
+    assert "previous_month_spent" in mom_data
+    assert "percentage_change" in mom_data
+    assert float(mom_data["current_month_spent"]) == 200.00
+
+    # Payment Mode Breakdown check
+    pm_response = await client.get("/api/dashboard/charts/payment-mode-breakdown")
+    assert pm_response.status_code == 200
+    pm_data = pm_response.json()
+    assert len(pm_data) == 2
+    
+    # Assert elements based on total spent descending
+    assert pm_data[0]["payment_mode"] == "card"
+    assert float(pm_data[0]["total_spent"]) == 150.00
+    assert pm_data[0]["percentage"] == 75.00
+
+    assert pm_data[1]["payment_mode"] == "upi"
+    assert float(pm_data[1]["total_spent"]) == 50.00
+    assert pm_data[1]["percentage"] == 25.00

@@ -7,11 +7,15 @@ import {
   useMoMComparison,
   useCategoryBreakdown,
   useSpendingTrend,
+  useTopCategories,
+  usePaymentModeBreakdown,
 } from "@/lib/queries/dashboard";
 import { useBudgetsStatus } from "@/lib/queries/budgets";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { SpendingTrendChart } from "@/components/dashboard/SpendingTrendChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
+import { TopCategoriesBarChart } from "@/components/dashboard/TopCategoriesBarChart";
+import { PaymentModeChart } from "@/components/dashboard/PaymentModeChart";
 import { BudgetStatusCard } from "@/components/dashboard/BudgetStatusCard";
 import { BudgetForm } from "@/components/budgets/BudgetForm";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -30,6 +34,8 @@ export default function Dashboard() {
   const { data: breakdown, isLoading: breakLoading } = useCategoryBreakdown();
   const { data: trend, isLoading: trendLoading } = useSpendingTrend(trendInterval);
   const { data: budgetsStatus, refetch: refetchBudgets } = useBudgetsStatus();
+  const { data: topCategories, isLoading: topLoading } = useTopCategories(5);
+  const { data: paymentBreakdown, isLoading: payLoading } = usePaymentModeBreakdown();
 
   const handleRetry = () => {
     refetchSum();
@@ -42,7 +48,7 @@ export default function Dashboard() {
     refetchBudgets();
   };
 
-  if (sumLoading || momLoading) {
+  if (sumLoading || momLoading || breakLoading || trendLoading || topLoading || payLoading) {
     return <LoadingState variant="grid" />;
   }
 
@@ -95,6 +101,12 @@ export default function Dashboard() {
           onIntervalChange={setTrendInterval}
         />
         <CategoryPieChart data={breakdown} />
+      </div>
+
+      {/* Row 2.5: Additional Rankings & Breakdowns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TopCategoriesBarChart data={topCategories} />
+        <PaymentModeChart data={paymentBreakdown} />
       </div>
 
       {/* Row 3: Recent List and Warning statuses */}

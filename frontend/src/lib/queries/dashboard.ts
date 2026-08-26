@@ -35,6 +35,12 @@ export interface TopCategory {
   total_spent: number;
 }
 
+export interface PaymentModeBreakdown {
+  payment_mode: string;
+  total_spent: number;
+  percentage: number;
+}
+
 export interface AverageSpend {
   average_spent: number;
   current_month_spent: number;
@@ -122,6 +128,21 @@ export function useAverageSpend(basis: "daily" | "weekly" = "daily") {
     queryKey: [...DASHBOARD_QUERY_KEY, "average-spend", basis],
     queryFn: async () => {
       const response = await apiClient.get<AverageSpend>("/dashboard/average-spend", { params: { basis } });
+      return response.data;
+    },
+  });
+}
+
+// Fetch payment mode spending breakdown
+export function usePaymentModeBreakdown(dateFrom?: string, dateTo?: string) {
+  return useQuery<PaymentModeBreakdown[], any>({
+    queryKey: [...DASHBOARD_QUERY_KEY, "charts", "payment-mode-breakdown", dateFrom, dateTo],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+
+      const response = await apiClient.get<PaymentModeBreakdown[]>("/dashboard/charts/payment-mode-breakdown", { params });
       return response.data;
     },
   });

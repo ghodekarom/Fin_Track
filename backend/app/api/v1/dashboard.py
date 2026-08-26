@@ -11,6 +11,7 @@ from app.schemas.dashboard import (
     MoMComparisonResponse,
     TopCategoryItem,
     AverageSpendResponse,
+    PaymentModeBreakdownItem,
 )
 
 router = APIRouter()
@@ -90,3 +91,13 @@ async def get_average_spend(
 ) -> AverageSpendResponse:
     """Retrieve average daily/weekly spending rate in the current month."""
     return await dashboard_service.get_average_spend(db, basis)
+
+
+@router.get("/charts/payment-mode-breakdown", response_model=list[PaymentModeBreakdownItem])
+async def get_payment_mode_breakdown(
+    db: db_dep,
+    date_from: date | None = Query(None, description="Filter start date"),
+    date_to: date | None = Query(None, description="Filter end date"),
+) -> list[PaymentModeBreakdownItem]:
+    """Retrieve payment-mode-wise spending data suitable for pie/donut charts."""
+    return await dashboard_service.get_payment_mode_breakdown(db, date_from, date_to)

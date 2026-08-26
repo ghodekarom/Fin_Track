@@ -59,3 +59,12 @@ class AverageSpendResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PaymentModeBreakdownItem(BaseModel):
+    payment_mode: str
+    total_spent: Decimal
+    percentage: float
+
+    class Config:
+        from_attributes = True
