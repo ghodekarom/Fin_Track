@@ -26,6 +26,23 @@
 - **Testing & Verification:**
   - Programmed an isolated, session-scoped pytest async configuration using SQLAlchemy `NullPool` to bypass connection concurrency issues.
   - Wrote and verified **12 unit and integration tests** (all passing successfully).
+- **Frontend Scaffolding & Theme Config:**
+  - Initialized Next.js 14 App Router, TypeScript, PostCSS, and Tailwind CSS.
+  - Set up a premium Slate/Emerald dark mode theme with custom glassmorphism styles and scrollbars.
+  - Programmed responsive `AppShell` with mobile drawer navigation, hamburger toggles, and UI status components (`EmptyState`, `LoadingState`, `ErrorState`).
+- **REST Client & React Query Hooks:**
+  - Setup typed Axios API client wrapping FastAPI validation errors.
+  - Implemented custom TanStack Query hooks for Categories, Expenses, Budgets, and Dashboard analytics.
+- **Frontend Views & Data Visualization:**
+  - Created ledger log view with paginated lists, mode badges, search filters, date ranges, and sorting.
+  - Designed Dashboard cards (MoM tracking, Daily Average spend, Overall target tracker).
+  - Integrated Recharts Area line trend models and Pie breakdown donut models.
+  - Coded safe category delete wizard (with reassignment/force choices) and budget target modals.
+- **Form Validations & Inline Fixes:**
+  - Integrated client-side Zod validators with React Hook Form.
+  - Solved an inline category creation bug by updating the `category_id` Zod schema to allow the `"NEW_CATEGORY"` literal value alongside UUIDs.
+  - Verified and successfully passed production compilation checks (`npm run build`) with zero type errors.
+
 
 ---
 
