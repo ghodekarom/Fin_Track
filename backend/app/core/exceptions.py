@@ -1,1 +1,109 @@
-# app/core/exceptions.py
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+class FinTrackException(Exception):
+    """Base exception for all FinTrack domain errors."""
+
+    def __init__(self, message: str, code: str = "BAD_REQUEST", field: str | None = None):
+        self.message = message
+        self.code = code
+        self.field = field
+        super().__init__(message)
+
+
+class NotFoundException(FinTrackException):
+    """Raised when a requested resource is not found."""
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message, code="NOT_FOUND", field=field)
+
+
+class ConflictException(FinTrackException):
+    """Raised when a resource operation conflicts with another constraint."""
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message, code="CONFLICT", field=field)
+
+
+class ValidationException(FinTrackException):
+    """Raised when request payload fails business logic validation."""
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message, code="VALIDATION_ERROR", field=field)
+
+
+def setup_exception_handlers(app: FastAPI) -> None:
+    """Mount exceptions handlers on the FastAPI application."""
+
+    @app.exception_handler(FinTrackException)
+    async def fintrack_exception_handler(
+        request: Request, exc: FinTrackException
+    ) -> JSONResponse:
+        status_code = status.HTTP_400_BAD_REQUEST
+        if isinstance(exc, NotFoundException):
+            status_code = status.HTTP_404_NOT_FOUND
+        elif isinstance(exc, ConflictException):
+            status_code = status.HTTP_409_CONFLICT
+        elif isinstance(exc, ValidationException):
+            status_code = status.HTTP_400_BAD_REQUEST
+
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "field": exc.field,
+                }
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        errors = exc.errors()
+        if errors:
+            err = errors[0]
+            loc = err.get("loc", [])
+            # Map location path to simple field name
+            field = str(loc[-1]) if len(loc) > 1 else (str(loc[0]) if loc else None)
+            # Remove "body." prefix or similar if present
+            if field == "body":
+                field = None
+            message = err.get("msg", "Validation error")
+            # Clean up default Pydantic message prefix if needed
+            if message.startswith("Value error, "):
+                message = message[13:]
+        else:
+            field = None
+            message = "Validation error"
+
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": message,
+                    "field": field,
+                }
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        # Fallback for unexpected errors
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An unexpected error occurred.",
+                    "field": None,
+                }
+            },
+        )
