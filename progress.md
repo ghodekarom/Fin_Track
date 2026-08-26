@@ -31,11 +31,12 @@
 
 ## 2. Current Project State
 - **Backend:** Fully implemented, verified, and stable. Database schema is populated and seeded.
-- **Frontend:** Not yet started (placeholder frontend scaffold needs to be established).
+- **Frontend:** Next.js 14+ (App Router, TypeScript) application fully configured and implemented. Wired with Axios API clients, TanStack Query hooks, Recharts analytics, and Zod validator forms. Builds and compiles successfully.
 
 ---
 
 ## 3. Next Steps (For the Next Session)
-1. **Frontend Scaffolding:** Initialize the Next.js 14+ frontend application using Tailwind CSS, shadcn/ui, Recharts, and Lucide icons.
-2. **API Client Integration:** Setup Axios client instance pointing to the FastAPI backend, and configure TanStack Query (React Query) for state fetching.
-3. **Frontend Views:** Implement the layout, dashboard cards, expense log listing, category creation modal, and budget tracking panels.
+1. **End-to-End Verification:** Run frontend and backend together locally to test full CRUD flows, charts, and budget threshold warnings in the browser.
+2. **Testing Suite:** Add Vitest component unit tests and Playwright end-to-end spec tests for validation logic.
+3. **Deployment Setup:** Configure Docker containers (`Dockerfile` and `docker-compose.yml`) for multi-container local orchestration, and prepare production deployments on Render/Vercel.
+
