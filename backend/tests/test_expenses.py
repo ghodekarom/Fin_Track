@@ -127,3 +127,79 @@ async def test_update_and_delete_expense(
     db_session.expunge(expense)
     expense_check = await db_session.get(Expense, expense_id)
     assert expense_check is None
+
+
+@pytest.mark.asyncio
+async def test_expense_budget_limit_enforcement(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    cat = Category(name="Utilities")
+    db_session.add(cat)
+    await db_session.commit()
+
+    # 1. Create Overall Budget (limit 1000.00)
+    payload_budget = {
+        "scope": "overall",
+        "period_month": "2026-08-01",
+        "limit_amount": 1000.00,
+    }
+    response_b = await client.post("/api/budgets", json=payload_budget)
+    assert response_b.status_code == 201
+
+    # 2. Add expense within budget (800.00 <= 1000.00)
+    payload_exp1 = {
+        "title": "Electricity Bill",
+        "category_id": str(cat.id),
+        "amount": 800.00,
+        "expense_date": "2026-08-15",
+        "payment_mode": "upi",
+    }
+    response_e1 = await client.post("/api/expenses", json=payload_exp1)
+    assert response_e1.status_code == 201
+    exp1_id = response_e1.json()["id"]
+
+    # 3. Try to add another expense that exceeds overall budget (800 + 300 = 1100 > 1000)
+    payload_exp2 = {
+        "title": "Water Bill",
+        "category_id": str(cat.id),
+        "amount": 300.00,
+        "expense_date": "2026-08-16",
+        "payment_mode": "upi",
+    }
+    response_e2 = await client.post("/api/expenses", json=payload_exp2)
+    assert response_e2.status_code == 400
+    assert response_e2.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert "exceed the overall monthly budget limit" in response_e2.json()["error"]["message"]
+
+    # 4. Try to update the first expense to exceed overall budget (1200 > 1000)
+    response_u1 = await client.put(f"/api/expenses/{exp1_id}", json={"amount": 1200.00})
+    assert response_u1.status_code == 400
+    assert response_u1.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    # Update the first expense to a lower amount to enable category budget testing (100.00 <= 1000.00)
+    response_u1_lower = await client.put(f"/api/expenses/{exp1_id}", json={"amount": 100.00})
+    assert response_u1_lower.status_code == 200
+
+    # 5. Create category budget for Utilities (limit 500.00)
+    payload_cat_budget = {
+        "scope": "category",
+        "category_id": str(cat.id),
+        "period_month": "2026-08-01",
+        "limit_amount": 500.00,
+    }
+    response_cat_b = await client.post("/api/budgets", json=payload_cat_budget)
+    assert response_cat_b.status_code == 201
+
+    # 6. Try to create expense that exceeds category budget (but is within overall limit)
+    # Overall total is 100.00 + 600.00 = 700.00 <= 1000.00, but category is 600.00 > 500.00.
+    payload_exp3 = {
+        "title": "Gas Bill",
+        "category_id": str(cat.id),
+        "amount": 600.00,
+        "expense_date": "2026-08-17",
+        "payment_mode": "upi",
+    }
+    response_e3 = await client.post("/api/expenses", json=payload_exp3)
+    assert response_e3.status_code == 400
+    assert "exceed the category monthly budget limit" in response_e3.json()["error"]["message"]
+

@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { CategoryBreakdown } from "../../lib/queries/dashboard";
 import { formatCurrency } from "../../lib/utils/currency";
 import { EmptyState } from "../ui/EmptyState";
-import { PieChartIcon } from "lucide-react";
+import { BarChart2 } from "lucide-react";
 
 interface CategoryPieChartProps {
   data?: CategoryBreakdown[];
@@ -28,17 +28,20 @@ export function CategoryPieChart({ data = [] }: CategoryPieChartProps) {
     return (
       <EmptyState
         title="No Category Data Available"
-        description="Add expenses with categories to render the breakdown donut chart."
-        icon={<PieChartIcon className="h-10 w-10 text-muted-foreground/60" />}
+        description="Add expenses with categories to render the breakdown chart."
+        icon={<BarChart2 className="h-10 w-10 text-muted-foreground/60" />}
       />
     );
   }
 
-  const chartData = data.map((item) => ({
-    name: item.category_name,
-    value: Number(item.total_spent),
-    percentage: item.percentage,
-  }));
+  // Sort categories by spending amount descending
+  const chartData = data
+    .map((item) => ({
+      name: item.category_name,
+      value: Number(item.total_spent),
+      percentage: item.percentage,
+    }))
+    .sort((a, b) => b.value - a.value);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -65,39 +68,42 @@ export function CategoryPieChart({ data = [] }: CategoryPieChartProps) {
       </h2>
       <div className="flex-1 min-h-0 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={85}
-              paddingAngle={3}
+          <BarChart
+            data={chartData}
+            layout="vertical"
+            margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" horizontal={false} />
+            <XAxis
+              type="number"
+              stroke="#6b7280"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              dataKey="name"
+              type="category"
+              stroke="#6b7280"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              width={90}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar
               dataKey="value"
+              radius={[0, 4, 4, 0]}
+              barSize={16}
             >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={COLORS[index % COLORS.length]}
-                  stroke="rgba(0,0,0,0.2)"
-                  strokeWidth={2}
                 />
               ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              layout="horizontal"
-              verticalAlign="bottom"
-              align="center"
-              iconSize={8}
-              iconType="circle"
-              wrapperStyle={{ fontSize: "11px", paddingTop: "15px" }}
-              formatter={(value, entry: any) => {
-                const percent = entry.payload?.percentage ?? 0;
-                return <span className="text-neutral-300 font-semibold">{value} ({percent.toFixed(0)}%)</span>;
-              }}
-            />
-          </PieChart>
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

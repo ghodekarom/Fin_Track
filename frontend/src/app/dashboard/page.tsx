@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   useDashboardSummary,
   useMoMComparison,
-  useAverageSpend,
   useCategoryBreakdown,
   useSpendingTrend,
 } from "@/lib/queries/dashboard";
@@ -28,7 +27,6 @@ export default function Dashboard() {
   // Queries
   const { data: summary, isLoading: sumLoading, isError: sumError, refetch: refetchSum } = useDashboardSummary();
   const { data: mom, isLoading: momLoading } = useMoMComparison();
-  const { data: average, isLoading: avgLoading } = useAverageSpend("daily");
   const { data: breakdown, isLoading: breakLoading } = useCategoryBreakdown();
   const { data: trend, isLoading: trendLoading } = useSpendingTrend(trendInterval);
   const { data: budgetsStatus, refetch: refetchBudgets } = useBudgetsStatus();
@@ -44,7 +42,7 @@ export default function Dashboard() {
     refetchBudgets();
   };
 
-  if (sumLoading || momLoading || avgLoading) {
+  if (sumLoading || momLoading) {
     return <LoadingState variant="grid" />;
   }
 
@@ -86,7 +84,6 @@ export default function Dashboard() {
       {/* Row 1: Summary Cards */}
       <SummaryCards
         momComparison={mom}
-        averageSpend={average}
         overallBudgetStatus={overallBudget}
       />
 

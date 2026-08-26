@@ -2,19 +2,17 @@
 
 import React from "react";
 import { formatCurrency } from "@/lib/utils/currency";
-import { MoMComparison, AverageSpend } from "@/lib/queries/dashboard";
+import { MoMComparison } from "@/lib/queries/dashboard";
 import { BudgetStatus } from "@/types/budget";
-import { TrendingDown, TrendingUp, DollarSign, Calendar, Scale } from "lucide-react";
+import { TrendingDown, TrendingUp, DollarSign, Scale } from "lucide-react";
 
 interface SummaryCardsProps {
   momComparison?: MoMComparison;
-  averageSpend?: AverageSpend;
   overallBudgetStatus?: BudgetStatus;
 }
 
 export function SummaryCards({
   momComparison,
-  averageSpend,
   overallBudgetStatus,
 }: SummaryCardsProps) {
   // Format MoM Comparison percentage
@@ -56,13 +54,13 @@ export function SummaryCards({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Total Spent Card */}
       <div className="glass-card p-6 rounded-2xl border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-              Total Spent (This Month)
+              Total Expenses Added So Far
             </p>
             <h3 className="text-2xl font-bold text-white mt-2">
               {formatCurrency(momComparison?.current_month_spent ?? 0)}
@@ -75,26 +73,6 @@ export function SummaryCards({
         <div className="mt-4 flex items-center justify-between">
           {renderMoMIndicator()}
           {!momComparison && <div className="h-4 w-32 bg-white/5 rounded animate-pulse" />}
-        </div>
-      </div>
-
-      {/* Average Spend Card */}
-      <div className="glass-card p-6 rounded-2xl border border-white/5 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-              Daily Average Spend
-            </p>
-            <h3 className="text-2xl font-bold text-white mt-2">
-              {formatCurrency(averageSpend?.average_spent ?? 0)}
-            </h3>
-          </div>
-          <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-muted-foreground group-hover:text-primary transition duration-300">
-            <Calendar className="h-5 w-5" />
-          </div>
-        </div>
-        <div className="mt-4 text-xs text-muted-foreground font-semibold">
-          Calculated for the current month so far
         </div>
       </div>
 

@@ -1,12 +1,16 @@
 import math
 import uuid
+from datetime import date
+from decimal import Decimal
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.models.category import Category
 from app.models.expense import Expense
+from app.models.budget import Budget
+from app.services.budget_service import get_month_range
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 
 
@@ -104,6 +108,70 @@ async def get_expense_by_id(db: AsyncSession, expense_id: uuid.UUID) -> Expense:
     return expense
 
 
+async def verify_budget_limit(
+    db: AsyncSession,
+    amount: Decimal,
+    expense_date: date,
+    category_id: uuid.UUID,
+    exclude_expense_id: uuid.UUID | None = None,
+) -> None:
+    """Check if adding/updating this expense violates any overall or category budgets."""
+    start_date, end_date = get_month_range(expense_date)
+    normalized_month = expense_date.replace(day=1)
+
+    # 1. Check overall budget
+    overall_budget_query = select(Budget).where(
+        Budget.scope == "overall",
+        Budget.period_month == normalized_month,
+    )
+    overall_budget_result = await db.execute(overall_budget_query)
+    overall_budget = overall_budget_result.scalar_one_or_none()
+
+    if overall_budget:
+        spent_query = select(func.sum(Expense.amount)).where(
+            Expense.expense_date >= start_date,
+            Expense.expense_date <= end_date,
+        )
+        if exclude_expense_id:
+            spent_query = spent_query.where(Expense.id != exclude_expense_id)
+
+        spent_result = await db.execute(spent_query)
+        current_spent = spent_result.scalar() or Decimal("0.00")
+
+        if current_spent + amount > overall_budget.limit_amount:
+            raise ValidationException(
+                f"Expense amount of {amount} would exceed the overall monthly budget limit of {overall_budget.limit_amount} (current spent: {current_spent})",
+                field="amount",
+            )
+
+    # 2. Check category budget
+    category_budget_query = select(Budget).where(
+        Budget.scope == "category",
+        Budget.category_id == category_id,
+        Budget.period_month == normalized_month,
+    )
+    category_budget_result = await db.execute(category_budget_query)
+    category_budget = category_budget_result.scalar_one_or_none()
+
+    if category_budget:
+        cat_spent_query = select(func.sum(Expense.amount)).where(
+            Expense.category_id == category_id,
+            Expense.expense_date >= start_date,
+            Expense.expense_date <= end_date,
+        )
+        if exclude_expense_id:
+            cat_spent_query = cat_spent_query.where(Expense.id != exclude_expense_id)
+
+        cat_spent_result = await db.execute(cat_spent_query)
+        current_cat_spent = cat_spent_result.scalar() or Decimal("0.00")
+
+        if current_cat_spent + amount > category_budget.limit_amount:
+            raise ValidationException(
+                f"Expense amount of {amount} would exceed the category monthly budget limit of {category_budget.limit_amount} (current spent: {current_cat_spent})",
+                field="amount",
+            )
+
+
 async def create_expense(db: AsyncSession, schema: ExpenseCreate) -> Expense:
     """Create a new expense entry."""
     # Verify category exists
@@ -112,6 +180,14 @@ async def create_expense(db: AsyncSession, schema: ExpenseCreate) -> Expense:
         raise NotFoundException(
             f"Category with ID {schema.category_id} not found", field="category_id"
         )
+
+    # Verify budget limit is not exceeded
+    await verify_budget_limit(
+        db,
+        amount=schema.amount,
+        expense_date=schema.expense_date,
+        category_id=schema.category_id,
+    )
 
     db_expense = Expense(
         title=schema.title,
@@ -135,12 +211,30 @@ async def update_expense(
     expense = await get_expense_by_id(db, expense_id)
 
     # Check category existence if it is being updated
+    category_id = expense.category_id
     if schema.category_id is not None and schema.category_id != expense.category_id:
         category_check = await db.get(Category, schema.category_id)
         if not category_check:
             raise NotFoundException(
                 f"Category with ID {schema.category_id} not found", field="category_id"
             )
+        category_id = schema.category_id
+
+    # Determine amount and date to validate
+    amount = schema.amount if schema.amount is not None else expense.amount
+    expense_date = schema.expense_date if schema.expense_date is not None else expense.expense_date
+
+    # Verify budget limit is not exceeded
+    await verify_budget_limit(
+        db,
+        amount=amount,
+        expense_date=expense_date,
+        category_id=category_id,
+        exclude_expense_id=expense_id,
+    )
+
+    # Update category_id
+    if schema.category_id is not None:
         expense.category_id = schema.category_id
 
     # Update other fields if provided in request
