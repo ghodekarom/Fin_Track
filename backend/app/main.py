@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.health import router as health_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.exceptions import setup_exception_handlers
@@ -36,6 +37,9 @@ app.add_middleware(
 # Register central exception handlers (centralized error shapes mapping)
 setup_exception_handlers(app)
 
+# Mount direct health check for platforms like Render/Kubernetes
+app.include_router(health_router, tags=["health"])
+
 # Mount aggregated routes under /api
 app.include_router(api_router, prefix="/api")
 
@@ -45,5 +49,6 @@ async def root() -> dict:
     return {
         "message": f"Welcome to {settings.APP_NAME}",
         "docs": "/docs",
-        "health": "/api/health",
+        "health": "/health",
+        "api_health": "/api/health",
     }
