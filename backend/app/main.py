@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,9 +7,28 @@ from app.api.v1.router import api_router
 from app.config import settings
 from app.core.exceptions import setup_exception_handlers
 from app.core.logging import setup_logging
+from app.db.base import Base
+from app.db.session import engine
+from app.db.seed import seed_categories
 
 # Initialize logging configuration
 setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure database schema is initialized
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    # Auto-seed default categories
+    try:
+        await seed_categories()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("uvicorn.error").warning(f"Category auto-seeding notice: {exc}")
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -17,6 +37,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 # Setup CORS origins
