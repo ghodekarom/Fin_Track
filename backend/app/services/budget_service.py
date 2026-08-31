@@ -2,7 +2,7 @@ import calendar
 import uuid
 from datetime import date
 from decimal import Decimal
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,9 +22,9 @@ def get_month_range(period_month: date) -> tuple[date, date]:
 
 
 async def get_budgets(
-    db: AsyncSession, period_month: date | None = None
+    db: AsyncSession, user_id: uuid.UUID, period_month: date | None = None
 ) -> list[Budget]:
-    """Retrieve all budgets configured for a specific month (defaults to current month)."""
+    """Retrieve all user-specific budgets configured for a month."""
     if period_month is None:
         period_month = date.today().replace(day=1)
     else:
@@ -33,19 +33,19 @@ async def get_budgets(
     query = (
         select(Budget)
         .options(joinedload(Budget.category))
-        .where(Budget.period_month == period_month)
-        .order_by(Budget.scope.desc())  # overall budgets first
+        .where(Budget.user_id == user_id, Budget.period_month == period_month)
+        .order_by(Budget.scope.desc())
     )
     result = await db.execute(query)
     return list(result.scalars().all())
 
 
-async def get_budget_by_id(db: AsyncSession, budget_id: uuid.UUID) -> Budget:
-    """Retrieve a single budget by ID, raising NotFoundException if missing."""
+async def get_budget_by_id(db: AsyncSession, user_id: uuid.UUID, budget_id: uuid.UUID) -> Budget:
+    """Retrieve a single budget by ID belonging to the authenticated user."""
     query = (
         select(Budget)
         .options(joinedload(Budget.category))
-        .where(Budget.id == budget_id)
+        .where(Budget.id == budget_id, Budget.user_id == user_id)
     )
     result = await db.execute(query)
     budget = result.scalar_one_or_none()
@@ -54,20 +54,26 @@ async def get_budget_by_id(db: AsyncSession, budget_id: uuid.UUID) -> Budget:
     return budget
 
 
-async def create_budget(db: AsyncSession, schema: BudgetCreate) -> Budget:
-    """Create a new budget goal for overall or category scopes."""
+async def create_budget(db: AsyncSession, user_id: uuid.UUID, schema: BudgetCreate) -> Budget:
+    """Create a new budget goal for the authenticated user."""
     period_month = schema.period_month.replace(day=1)
 
     # Validation: Verify category exists if scope is category
     if schema.scope == "category":
-        category_check = await db.get(Category, schema.category_id)
+        category_query = select(Category).where(
+            Category.id == schema.category_id,
+            or_(Category.user_id == user_id, Category.user_id.is_(None)),
+        )
+        category_result = await db.execute(category_query)
+        category_check = category_result.scalar_one_or_none()
         if not category_check:
             raise NotFoundException(
                 f"Category with ID {schema.category_id} not found", field="category_id"
             )
 
-    # Check for uniqueness conflicts
+    # Check for uniqueness conflicts for this user
     conflict_query = select(Budget).where(
+        Budget.user_id == user_id,
         Budget.scope == schema.scope,
         Budget.period_month == period_month,
     )
@@ -87,6 +93,7 @@ async def create_budget(db: AsyncSession, schema: BudgetCreate) -> Budget:
         )
 
     db_budget = Budget(
+        user_id=user_id,
         scope=schema.scope,
         category_id=schema.category_id,
         period_month=period_month,
@@ -95,47 +102,49 @@ async def create_budget(db: AsyncSession, schema: BudgetCreate) -> Budget:
     db.add(db_budget)
     await db.commit()
 
-    return await get_budget_by_id(db, db_budget.id)
+    return await get_budget_by_id(db, user_id, db_budget.id)
 
 
 async def update_budget(
-    db: AsyncSession, budget_id: uuid.UUID, schema: BudgetUpdate
+    db: AsyncSession, user_id: uuid.UUID, budget_id: uuid.UUID, schema: BudgetUpdate
 ) -> Budget:
-    """Update limit amount of an existing budget."""
-    budget = await get_budget_by_id(db, budget_id)
+    """Update limit amount of an existing user-owned budget."""
+    budget = await get_budget_by_id(db, user_id, budget_id)
     budget.limit_amount = schema.limit_amount
     await db.commit()
     await db.refresh(budget)
     return budget
 
 
-async def delete_budget(db: AsyncSession, budget_id: uuid.UUID) -> None:
-    """Delete a budget goal."""
-    budget = await get_budget_by_id(db, budget_id)
+async def delete_budget(db: AsyncSession, user_id: uuid.UUID, budget_id: uuid.UUID) -> None:
+    """Delete a user-owned budget goal."""
+    budget = await get_budget_by_id(db, user_id, budget_id)
     await db.delete(budget)
     await db.commit()
 
 
-async def get_budgets_status(db: AsyncSession, period_month: date) -> list[dict]:
-    """Calculate live spent, remaining, and warning status for all budgets in a month."""
+async def get_budgets_status(db: AsyncSession, user_id: uuid.UUID, period_month: date) -> list[dict]:
+    """Calculate live spent, remaining, and warning status for user's budgets in a month."""
     start_date, end_date = get_month_range(period_month)
     normalized_month = period_month.replace(day=1)
 
-    # Fetch all budgets for this month
-    budgets = await get_budgets(db, normalized_month)
+    # Fetch all budgets for this user and month
+    budgets = await get_budgets(db, user_id, normalized_month)
 
-    # Query overall spend in this month
+    # Query overall spend for this user in this month
     overall_spend_query = select(func.sum(Expense.amount)).where(
+        Expense.user_id == user_id,
         Expense.expense_date >= start_date,
         Expense.expense_date <= end_date,
     )
     overall_spend_result = await db.execute(overall_spend_query)
     overall_spent = overall_spend_result.scalar() or Decimal("0.00")
 
-    # Query category-wise spends in this month
+    # Query category-wise spends for this user in this month
     category_spend_query = (
         select(Expense.category_id, func.sum(Expense.amount))
         .where(
+            Expense.user_id == user_id,
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
         )
@@ -166,6 +175,7 @@ async def get_budgets_status(db: AsyncSession, period_month: date) -> list[dict]
         statuses.append(
             {
                 "id": budget.id,
+                "user_id": budget.user_id,
                 "scope": budget.scope,
                 "category_id": budget.category_id,
                 "category_name": budget.category.name if budget.category else None,

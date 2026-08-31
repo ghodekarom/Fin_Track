@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.category import CategoryBriefResponse
 
@@ -19,12 +19,12 @@ class BudgetBase(BaseModel):
         return date(v.year, v.month, 1)
 
     @model_validator(mode="after")
-    def validate_scope_category_relation(cls, values: "BudgetBase") -> "BudgetBase":
-        if values.scope == "overall" and values.category_id is not None:
+    def validate_scope_category_relation(self) -> "BudgetBase":
+        if self.scope == "overall" and self.category_id is not None:
             raise ValueError("Overall budget scope must not have a category_id")
-        if values.scope == "category" and values.category_id is None:
+        if self.scope == "category" and self.category_id is None:
             raise ValueError("Category budget scope must have a category_id")
-        return values
+        return self
 
 
 class BudgetCreate(BudgetBase):
@@ -37,6 +37,7 @@ class BudgetUpdate(BaseModel):
 
 class BudgetResponse(BaseModel):
     id: uuid.UUID
+    user_id: uuid.UUID
     scope: str
     category_id: uuid.UUID | None
     category: CategoryBriefResponse | None = None
@@ -45,12 +46,12 @@ class BudgetResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetStatusResponse(BaseModel):
     id: uuid.UUID
+    user_id: uuid.UUID
     scope: str
     category_id: uuid.UUID | None
     category_name: str | None = None
@@ -60,5 +61,4 @@ class BudgetStatusResponse(BaseModel):
     remaining: Decimal
     status: Literal["on_track", "near_limit", "over_budget"]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

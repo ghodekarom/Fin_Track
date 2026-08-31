@@ -5,13 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
 from app.models.expense import Expense
+from app.models.user import User
 
 
 @pytest.mark.asyncio
 async def test_create_and_conflict_budgets(
-    client: AsyncClient, db_session: AsyncSession
+    auth_client: AsyncClient, test_user: User, db_session: AsyncSession
 ) -> None:
-    cat = Category(name="Rent")
+    cat = Category(user_id=test_user.id, name="Rent", is_default=False)
     db_session.add(cat)
     await db_session.commit()
 
@@ -21,12 +22,12 @@ async def test_create_and_conflict_budgets(
         "period_month": "2026-08-01",
         "limit_amount": 50000.00,
     }
-    response = await client.post("/api/budgets", json=payload_overall)
+    response = await auth_client.post("/api/budgets", json=payload_overall)
     assert response.status_code == 201
     assert response.json()["scope"] == "overall"
 
     # 2. Check conflict on duplicate overall budget
-    conflict_overall = await client.post("/api/budgets", json=payload_overall)
+    conflict_overall = await auth_client.post("/api/budgets", json=payload_overall)
     assert conflict_overall.status_code == 409
 
     # 3. Create Category Budget
@@ -36,20 +37,20 @@ async def test_create_and_conflict_budgets(
         "period_month": "2026-08-01",
         "limit_amount": 15000.00,
     }
-    response_cat = await client.post("/api/budgets", json=payload_cat)
+    response_cat = await auth_client.post("/api/budgets", json=payload_cat)
     assert response_cat.status_code == 201
     assert response_cat.json()["scope"] == "category"
 
     # 4. Check conflict on duplicate category budget
-    conflict_cat = await client.post("/api/budgets", json=payload_cat)
+    conflict_cat = await auth_client.post("/api/budgets", json=payload_cat)
     assert conflict_cat.status_code == 409
 
 
 @pytest.mark.asyncio
 async def test_budget_status_calculation(
-    client: AsyncClient, db_session: AsyncSession
+    auth_client: AsyncClient, test_user: User, db_session: AsyncSession
 ) -> None:
-    cat = Category(name="Food")
+    cat = Category(user_id=test_user.id, name="Food", is_default=False)
     db_session.add(cat)
     await db_session.commit()
 
@@ -59,7 +60,7 @@ async def test_budget_status_calculation(
         "period_month": "2026-08-01",
         "limit_amount": 1000.00,
     }
-    await client.post("/api/budgets", json=payload_overall)
+    await auth_client.post("/api/budgets", json=payload_overall)
 
     # Create category budget (limit 500)
     payload_cat = {
@@ -68,10 +69,11 @@ async def test_budget_status_calculation(
         "period_month": "2026-08-01",
         "limit_amount": 500.00,
     }
-    await client.post("/api/budgets", json=payload_cat)
+    await auth_client.post("/api/budgets", json=payload_cat)
 
     # Add expense under category (amount 460 -> near limit >= 90%)
     expense1 = Expense(
+        user_id=test_user.id,
         title="Restaurant Bill",
         category_id=cat.id,
         amount=460.00,
@@ -81,7 +83,7 @@ async def test_budget_status_calculation(
     await db_session.commit()
 
     # Get budget statuses
-    response = await client.get("/api/budgets/status?period_month=2026-08-01")
+    response = await auth_client.get("/api/budgets/status?period_month=2026-08-01")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -101,6 +103,7 @@ async def test_budget_status_calculation(
 
     # Add another expense that blows the budget
     expense2 = Expense(
+        user_id=test_user.id,
         title="More Food",
         category_id=cat.id,
         amount=100.00,
@@ -110,7 +113,7 @@ async def test_budget_status_calculation(
     await db_session.commit()
 
     # Check status again
-    response = await client.get("/api/budgets/status?period_month=2026-08-01")
+    response = await auth_client.get("/api/budgets/status?period_month=2026-08-01")
     data = response.json()
     status_map = {b["scope"]: b for b in data}
 

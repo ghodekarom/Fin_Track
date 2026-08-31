@@ -2,8 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.category import CategoryBriefResponse
 
@@ -66,6 +65,7 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseResponse(BaseModel):
     id: uuid.UUID
+    user_id: uuid.UUID
     title: str
     amount: Decimal
     expense_date: date
@@ -76,5 +76,4 @@ class ExpenseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

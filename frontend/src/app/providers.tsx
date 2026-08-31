@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { GoogleOAuthProvider } from "@react-oauth/google";
+import { AuthProvider } from "@/context/AuthContext";
 
 interface ProvidersProps {
   children: React.ReactNode;
 }
 
 export function Providers({ children }: ProvidersProps) {
-  // Prevent queryClient state sharing across server renders/users
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -21,10 +22,23 @@ export function Providers({ children }: ProvidersProps) {
       })
   );
 
-  return (
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+
+  const content = (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AuthProvider>{children}</AuthProvider>
     </QueryClientProvider>
   );
+
+  if (googleClientId) {
+    return (
+      <GoogleOAuthProvider clientId={googleClientId}>
+        {content}
+      </GoogleOAuthProvider>
+    );
+  }
+
+  return content;
 }
+
 export default Providers;

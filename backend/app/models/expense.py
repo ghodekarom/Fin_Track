@@ -1,11 +1,16 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.category import Category
 
 
 class Expense(Base):
@@ -13,6 +18,11 @@ class Expense(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     title: Mapped[str] = mapped_column(String(50), nullable=False)
     category_id: Mapped[uuid.UUID] = mapped_column(
@@ -35,6 +45,7 @@ class Expense(Base):
     )
 
     # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="expenses")
     category: Mapped["Category"] = relationship("Category", back_populates="expenses")
 
     __table_args__ = (
@@ -46,10 +57,12 @@ class Expense(Base):
             "payment_mode IN ('cash', 'card', 'upi', 'other')",
             name="check_expenses_payment_mode",
         ),
+        Index("idx_expenses_user_id", user_id),
+        Index("idx_expenses_user_date", user_id, expense_date),
+        Index("idx_expenses_user_category", user_id, category_id),
+        Index("idx_expenses_user_amount", user_id, amount),
         Index("idx_expenses_category_id", category_id),
         Index("idx_expenses_expense_date", expense_date),
         Index("idx_expenses_amount", amount),
-        # Since trigram indexes depend on PostgreSQL extensions, we will define a standard btree index
-        # on title and notes which is fully compatible out-of-the-box.
         Index("idx_expenses_title_notes", title, notes),
     )

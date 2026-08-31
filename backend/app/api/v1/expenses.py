@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Literal
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import db_dep, pagination_dep
+from app.api.deps import current_user_dep, db_dep, pagination_dep
 from app.schemas.common import PaginatedResponse
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
 from app.services import expense_service
@@ -15,6 +15,7 @@ router = APIRouter()
 @router.get("", response_model=PaginatedResponse[ExpenseResponse])
 async def list_expenses(
     db: db_dep,
+    current_user: current_user_dep,
     pagination: pagination_dep,
     search: str | None = Query(None, description="Search by title or notes"),
     category_id: uuid.UUID | None = Query(None, description="Filter by category ID"),
@@ -30,7 +31,7 @@ async def list_expenses(
     ),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort direction"),
 ) -> PaginatedResponse[ExpenseResponse]:
-    """Retrieve filtered, sorted, and paginated expenses list."""
+    """Retrieve filtered, sorted, and paginated expenses list for authenticated user."""
     filters = {
         "search": search,
         "category_id": category_id,
@@ -42,31 +43,46 @@ async def list_expenses(
         "sort_by": sort_by,
         "sort_order": sort_order,
     }
-    result = await expense_service.get_expenses(db, filters, pagination)
+    result = await expense_service.get_expenses(db, current_user.id, filters, pagination)
     return PaginatedResponse[ExpenseResponse](**result)
 
 
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
-async def create_expense(db: db_dep, payload: ExpenseCreate) -> ExpenseResponse:
-    """Log a new expense entry."""
-    return await expense_service.create_expense(db, payload)
+async def create_expense(
+    db: db_dep,
+    current_user: current_user_dep,
+    payload: ExpenseCreate,
+) -> ExpenseResponse:
+    """Log a new expense entry for authenticated user."""
+    return await expense_service.create_expense(db, current_user.id, payload)
 
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)
-async def get_expense(db: db_dep, expense_id: uuid.UUID) -> ExpenseResponse:
-    """Get details of a single expense entry."""
-    return await expense_service.get_expense_by_id(db, expense_id)
+async def get_expense(
+    db: db_dep,
+    current_user: current_user_dep,
+    expense_id: uuid.UUID,
+) -> ExpenseResponse:
+    """Get details of a single user-owned expense entry."""
+    return await expense_service.get_expense_by_id(db, current_user.id, expense_id)
 
 
 @router.put("/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
-    db: db_dep, expense_id: uuid.UUID, payload: ExpenseUpdate
+    db: db_dep,
+    current_user: current_user_dep,
+    expense_id: uuid.UUID,
+    payload: ExpenseUpdate,
 ) -> ExpenseResponse:
-    """Update details of an existing expense."""
-    return await expense_service.update_expense(db, expense_id, payload)
+    """Update details of an existing user-owned expense."""
+    return await expense_service.update_expense(db, current_user.id, expense_id, payload)
 
 
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_expense(db: db_dep, expense_id: uuid.UUID) -> None:
-    """Delete an expense entry."""
-    await expense_service.delete_expense(db, expense_id)
+async def delete_expense(
+    db: db_dep,
+    current_user: current_user_dep,
+    expense_id: uuid.UUID,
+) -> None:
+    """Delete an expense entry belonging to authenticated user."""
+    await expense_service.delete_expense(db, current_user.id, expense_id)

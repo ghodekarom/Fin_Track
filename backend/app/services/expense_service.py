@@ -15,13 +15,14 @@ from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 
 
 async def get_expenses(
-    db: AsyncSession, filters: dict, pagination: dict
+    db: AsyncSession, user_id: uuid.UUID, filters: dict, pagination: dict
 ) -> dict:
-    """Retrieve filtered, sorted, and paginated expenses."""
+    """Retrieve user-specific filtered, sorted, and paginated expenses."""
     query = (
         select(Expense)
         .options(joinedload(Expense.category))
         .join(Category, Expense.category_id == Category.id)
+        .where(Expense.user_id == user_id)
     )
 
     # Search (title, notes)
@@ -94,12 +95,12 @@ async def get_expenses(
     }
 
 
-async def get_expense_by_id(db: AsyncSession, expense_id: uuid.UUID) -> Expense:
-    """Retrieve an expense by ID, raising NotFoundException if missing."""
+async def get_expense_by_id(db: AsyncSession, user_id: uuid.UUID, expense_id: uuid.UUID) -> Expense:
+    """Retrieve an expense by ID ensuring it belongs to the authenticated user."""
     query = (
         select(Expense)
         .options(joinedload(Expense.category))
-        .where(Expense.id == expense_id)
+        .where(Expense.id == expense_id, Expense.user_id == user_id)
     )
     result = await db.execute(query)
     expense = result.scalar_one_or_none()
@@ -110,17 +111,19 @@ async def get_expense_by_id(db: AsyncSession, expense_id: uuid.UUID) -> Expense:
 
 async def verify_budget_limit(
     db: AsyncSession,
+    user_id: uuid.UUID,
     amount: Decimal,
     expense_date: date,
     category_id: uuid.UUID,
     exclude_expense_id: uuid.UUID | None = None,
 ) -> None:
-    """Check if adding/updating this expense violates any overall or category budgets."""
+    """Check if adding/updating this expense violates user's overall or category budgets."""
     start_date, end_date = get_month_range(expense_date)
     normalized_month = expense_date.replace(day=1)
 
     # 1. Check overall budget
     overall_budget_query = select(Budget).where(
+        Budget.user_id == user_id,
         Budget.scope == "overall",
         Budget.period_month == normalized_month,
     )
@@ -129,6 +132,7 @@ async def verify_budget_limit(
 
     if overall_budget:
         spent_query = select(func.sum(Expense.amount)).where(
+            Expense.user_id == user_id,
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
         )
@@ -146,6 +150,7 @@ async def verify_budget_limit(
 
     # 2. Check category budget
     category_budget_query = select(Budget).where(
+        Budget.user_id == user_id,
         Budget.scope == "category",
         Budget.category_id == category_id,
         Budget.period_month == normalized_month,
@@ -155,6 +160,7 @@ async def verify_budget_limit(
 
     if category_budget:
         cat_spent_query = select(func.sum(Expense.amount)).where(
+            Expense.user_id == user_id,
             Expense.category_id == category_id,
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
@@ -172,10 +178,15 @@ async def verify_budget_limit(
             )
 
 
-async def create_expense(db: AsyncSession, schema: ExpenseCreate) -> Expense:
-    """Create a new expense entry."""
-    # Verify category exists
-    category_check = await db.get(Category, schema.category_id)
+async def create_expense(db: AsyncSession, user_id: uuid.UUID, schema: ExpenseCreate) -> Expense:
+    """Create a new expense entry linked to the authenticated user."""
+    # Verify category exists (accessible globally or created by user)
+    category_query = select(Category).where(
+        Category.id == schema.category_id,
+        or_(Category.user_id == user_id, Category.user_id.is_(None)),
+    )
+    category_result = await db.execute(category_query)
+    category_check = category_result.scalar_one_or_none()
     if not category_check:
         raise NotFoundException(
             f"Category with ID {schema.category_id} not found", field="category_id"
@@ -184,12 +195,14 @@ async def create_expense(db: AsyncSession, schema: ExpenseCreate) -> Expense:
     # Verify budget limit is not exceeded
     await verify_budget_limit(
         db,
+        user_id=user_id,
         amount=schema.amount,
         expense_date=schema.expense_date,
         category_id=schema.category_id,
     )
 
     db_expense = Expense(
+        user_id=user_id,
         title=schema.title,
         category_id=schema.category_id,
         amount=schema.amount,
@@ -201,19 +214,24 @@ async def create_expense(db: AsyncSession, schema: ExpenseCreate) -> Expense:
     await db.commit()
 
     # Reload with relation
-    return await get_expense_by_id(db, db_expense.id)
+    return await get_expense_by_id(db, user_id, db_expense.id)
 
 
 async def update_expense(
-    db: AsyncSession, expense_id: uuid.UUID, schema: ExpenseUpdate
+    db: AsyncSession, user_id: uuid.UUID, expense_id: uuid.UUID, schema: ExpenseUpdate
 ) -> Expense:
-    """Update properties of an existing expense."""
-    expense = await get_expense_by_id(db, expense_id)
+    """Update properties of an existing user-owned expense."""
+    expense = await get_expense_by_id(db, user_id, expense_id)
 
     # Check category existence if it is being updated
     category_id = expense.category_id
     if schema.category_id is not None and schema.category_id != expense.category_id:
-        category_check = await db.get(Category, schema.category_id)
+        category_query = select(Category).where(
+            Category.id == schema.category_id,
+            or_(Category.user_id == user_id, Category.user_id.is_(None)),
+        )
+        category_result = await db.execute(category_query)
+        category_check = category_result.scalar_one_or_none()
         if not category_check:
             raise NotFoundException(
                 f"Category with ID {schema.category_id} not found", field="category_id"
@@ -227,6 +245,7 @@ async def update_expense(
     # Verify budget limit is not exceeded
     await verify_budget_limit(
         db,
+        user_id=user_id,
         amount=amount,
         expense_date=expense_date,
         category_id=category_id,
@@ -245,11 +264,11 @@ async def update_expense(
 
     await db.commit()
     # Reload with relation
-    return await get_expense_by_id(db, expense.id)
+    return await get_expense_by_id(db, user_id, expense.id)
 
 
-async def delete_expense(db: AsyncSession, expense_id: uuid.UUID) -> None:
-    """Delete an expense entry."""
-    expense = await get_expense_by_id(db, expense_id)
+async def delete_expense(db: AsyncSession, user_id: uuid.UUID, expense_id: uuid.UUID) -> None:
+    """Delete an expense entry belonging to the authenticated user."""
+    expense = await get_expense_by_id(db, user_id, expense_id)
     await db.delete(expense)
     await db.commit()

@@ -25,14 +25,17 @@ async def seed_categories() -> None:
     print("Starting database seeding...")
     async with async_session_factory() as session:
         for name in DEFAULT_CATEGORIES:
-            # Case-insensitive query to see if category already exists
-            query = select(Category).where(func.lower(Category.name) == name.lower())
+            # Case-insensitive query for global default category (user_id IS NULL)
+            query = select(Category).where(
+                Category.user_id.is_(None),
+                func.lower(Category.name) == name.lower(),
+            )
             result = await session.execute(query)
             existing = result.scalar_one_or_none()
 
             if not existing:
                 print(f"Seeding default category: {name}")
-                new_category = Category(name=name, is_default=True)
+                new_category = Category(name=name, is_default=True, user_id=None)
                 session.add(new_category)
             else:
                 print(f"Category '{name}' already exists. Skipping.")

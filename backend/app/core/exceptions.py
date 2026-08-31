@@ -34,6 +34,20 @@ class ValidationException(FinTrackException):
         super().__init__(message, code="VALIDATION_ERROR", field=field)
 
 
+class UnauthorizedException(FinTrackException):
+    """Raised when authentication fails or token is invalid/expired."""
+
+    def __init__(self, message: str = "Could not validate credentials", field: str | None = None):
+        super().__init__(message, code="UNAUTHORIZED", field=field)
+
+
+class ForbiddenException(FinTrackException):
+    """Raised when an authenticated user attempts to access another user's resource."""
+
+    def __init__(self, message: str = "You do not have permission to access this resource", field: str | None = None):
+        super().__init__(message, code="FORBIDDEN", field=field)
+
+
 def setup_exception_handlers(app: FastAPI) -> None:
     """Mount exceptions handlers on the FastAPI application."""
 
@@ -48,9 +62,18 @@ def setup_exception_handlers(app: FastAPI) -> None:
             status_code = status.HTTP_409_CONFLICT
         elif isinstance(exc, ValidationException):
             status_code = status.HTTP_400_BAD_REQUEST
+        elif isinstance(exc, UnauthorizedException):
+            status_code = status.HTTP_401_UNAUTHORIZED
+        elif isinstance(exc, ForbiddenException):
+            status_code = status.HTTP_403_FORBIDDEN
+
+        headers = {}
+        if isinstance(exc, UnauthorizedException):
+            headers["WWW-Authenticate"] = "Bearer"
 
         return JSONResponse(
             status_code=status_code,
+            headers=headers,
             content={
                 "error": {
                     "code": exc.code,
@@ -68,13 +91,10 @@ def setup_exception_handlers(app: FastAPI) -> None:
         if errors:
             err = errors[0]
             loc = err.get("loc", [])
-            # Map location path to simple field name
             field = str(loc[-1]) if len(loc) > 1 else (str(loc[0]) if loc else None)
-            # Remove "body." prefix or similar if present
             if field == "body":
                 field = None
             message = err.get("msg", "Validation error")
-            # Clean up default Pydantic message prefix if needed
             if message.startswith("Value error, "):
                 message = message[13:]
         else:
@@ -96,7 +116,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
     async def general_exception_handler(
         request: Request, exc: Exception
     ) -> JSONResponse:
-        # Fallback for unexpected errors
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={

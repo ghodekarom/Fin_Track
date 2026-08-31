@@ -1,4 +1,5 @@
 import calendar
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import func, select
@@ -10,30 +11,32 @@ from app.models.expense import Expense
 from app.services.budget_service import get_budgets_status, get_month_range
 
 
-async def get_summary(db: AsyncSession, period_month: date) -> dict:
-    """Retrieve total monthly spend, recent expenses, and budget status snapshots."""
+async def get_summary(db: AsyncSession, user_id: uuid.UUID, period_month: date) -> dict:
+    """Retrieve total monthly spend, recent expenses, and budget status snapshots for the user."""
     start_date, end_date = get_month_range(period_month)
 
-    # 1. Total monthly spend
+    # 1. Total monthly spend for user
     total_query = select(func.sum(Expense.amount)).where(
+        Expense.user_id == user_id,
         Expense.expense_date >= start_date,
         Expense.expense_date <= end_date,
     )
     total_result = await db.execute(total_query)
     total_spent = total_result.scalar() or Decimal("0.00")
 
-    # 2. Recent 5 expenses
+    # 2. Recent 5 expenses for user
     recent_query = (
         select(Expense)
         .options(joinedload(Expense.category))
+        .where(Expense.user_id == user_id)
         .order_by(Expense.expense_date.desc(), Expense.created_at.desc())
         .limit(5)
     )
     recent_result = await db.execute(recent_query)
     recent_expenses = recent_result.scalars().all()
 
-    # 3. Budget status snapshot
-    budgets_status = await get_budgets_status(db, period_month)
+    # 3. Budget status snapshot for user
+    budgets_status = await get_budgets_status(db, user_id, period_month)
 
     return {
         "total_spent": total_spent,
@@ -43,14 +46,21 @@ async def get_summary(db: AsyncSession, period_month: date) -> dict:
 
 
 async def get_category_breakdown(
-    db: AsyncSession, date_from: date | None = None, date_to: date | None = None
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[dict]:
-    """Retrieve spending grouped by category."""
-    query = select(
-        Category.id.label("category_id"),
-        Category.name.label("category_name"),
-        func.sum(Expense.amount).label("total_spent"),
-    ).join(Expense, Category.id == Expense.category_id)
+    """Retrieve spending grouped by category for the user."""
+    query = (
+        select(
+            Category.id.label("category_id"),
+            Category.name.label("category_name"),
+            func.sum(Expense.amount).label("total_spent"),
+        )
+        .join(Expense, Category.id == Expense.category_id)
+        .where(Expense.user_id == user_id)
+    )
 
     if date_from:
         query = query.where(Expense.expense_date >= date_from)
@@ -80,18 +90,21 @@ async def get_category_breakdown(
 
 async def get_spending_trend(
     db: AsyncSession,
+    user_id: uuid.UUID,
     period: str,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict]:
-    """Retrieve spending over time intervals (daily, weekly, monthly)."""
-    # Map periods to PostgreSQL date_trunc intervals
+    """Retrieve spending over time intervals for the user."""
     trunc_map = {"daily": "day", "weekly": "week", "monthly": "month"}
     trunc_val = trunc_map.get(period, "day")
 
-    query = select(
-        func.date_trunc(trunc_val, Expense.expense_date).label("interval_date"),
-        func.sum(Expense.amount).label("total_spent"),
+    query = (
+        select(
+            func.date_trunc(trunc_val, Expense.expense_date).label("interval_date"),
+            func.sum(Expense.amount).label("total_spent"),
+        )
+        .where(Expense.user_id == user_id)
     )
 
     if date_from:
@@ -111,33 +124,34 @@ async def get_spending_trend(
     ]
 
 
-async def get_comparison(db: AsyncSession) -> dict:
-    """Retrieve month-over-month total comparison and percentage change."""
+async def get_comparison(db: AsyncSession, user_id: uuid.UUID) -> dict:
+    """Retrieve user's month-over-month total comparison and percentage change."""
     today = date.today()
     current_month_start, current_month_end = get_month_range(today)
 
-    # Previous month range
     first_day_of_current = today.replace(day=1)
     last_day_of_prev = first_day_of_current - timedelta(days=1)
     prev_month_start, prev_month_end = get_month_range(last_day_of_prev)
 
-    # Query current month spend
+    # Current month spend for user
     current_query = select(func.sum(Expense.amount)).where(
+        Expense.user_id == user_id,
         Expense.expense_date >= current_month_start,
         Expense.expense_date <= current_month_end,
     )
     current_result = await db.execute(current_query)
     current_spent = current_result.scalar() or Decimal("0.00")
 
-    # Query previous month spend
+    # Previous month spend for user
     prev_query = select(func.sum(Expense.amount)).where(
+        Expense.user_id == user_id,
         Expense.expense_date >= prev_month_start,
         Expense.expense_date <= prev_month_end,
     )
     prev_result = await db.execute(prev_query)
     prev_spent = prev_result.scalar() or Decimal("0.00")
 
-    # Calculate percentage change
+    # Percentage change
     if prev_spent > Decimal("0.00"):
         percentage_change = ((current_spent - prev_spent) / prev_spent) * Decimal("100.00")
     else:
@@ -150,8 +164,8 @@ async def get_comparison(db: AsyncSession) -> dict:
     }
 
 
-async def get_top_categories(db: AsyncSession, limit: int = 5) -> list[dict]:
-    """Retrieve ranked categories by spending."""
+async def get_top_categories(db: AsyncSession, user_id: uuid.UUID, limit: int = 5) -> list[dict]:
+    """Retrieve user's ranked categories by spending."""
     today = date.today()
     start_date, end_date = get_month_range(today)
 
@@ -162,6 +176,7 @@ async def get_top_categories(db: AsyncSession, limit: int = 5) -> list[dict]:
         )
         .join(Expense, Category.id == Expense.category_id)
         .where(
+            Expense.user_id == user_id,
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
         )
@@ -180,24 +195,23 @@ async def get_top_categories(db: AsyncSession, limit: int = 5) -> list[dict]:
     ]
 
 
-async def get_average_spend(db: AsyncSession, basis: str) -> dict:
-    """Retrieve average daily/weekly spend in the current month."""
+async def get_average_spend(db: AsyncSession, user_id: uuid.UUID, basis: str) -> dict:
+    """Retrieve user's average daily/weekly spend in current month."""
     today = date.today()
     start_date, end_date = get_month_range(today)
 
-    # Spend in current month
     query = select(func.sum(Expense.amount)).where(
+        Expense.user_id == user_id,
         Expense.expense_date >= start_date,
         Expense.expense_date <= end_date,
     )
     result = await db.execute(query)
     current_spent = result.scalar() or Decimal("0.00")
 
-    # Calculate basis divisions
     days_elapsed = today.day
     if basis == "daily":
         average = current_spent / Decimal(str(days_elapsed))
-    else:  # weekly
+    else:
         weeks_elapsed = Decimal(str(days_elapsed)) / Decimal("7.0")
         average = current_spent / weeks_elapsed
 
@@ -210,13 +224,19 @@ async def get_average_spend(db: AsyncSession, basis: str) -> dict:
 
 
 async def get_payment_mode_breakdown(
-    db: AsyncSession, date_from: date | None = None, date_to: date | None = None
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[dict]:
-    """Retrieve spending grouped by payment mode."""
+    """Retrieve user's spending grouped by payment mode."""
     query = select(
         Expense.payment_mode.label("payment_mode"),
         func.sum(Expense.amount).label("total_spent"),
-    ).where(Expense.payment_mode.isnot(None))
+    ).where(
+        Expense.user_id == user_id,
+        Expense.payment_mode.isnot(None),
+    )
 
     if date_from:
         query = query.where(Expense.expense_date >= date_from)
@@ -230,7 +250,6 @@ async def get_payment_mode_breakdown(
     result = await db.execute(query)
     rows = result.all()
 
-    # Calculate grand total to derive percentages
     grand_total = sum((row.total_spent or Decimal("0.00")) for row in rows)
 
     return [

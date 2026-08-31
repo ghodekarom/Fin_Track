@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 from fastapi import APIRouter, Query
 
-from app.api.deps import db_dep
+from app.api.deps import current_user_dep, db_dep
 from app.services import dashboard_service
 from app.schemas.dashboard import (
     DashboardSummaryResponse,
@@ -20,84 +20,93 @@ router = APIRouter()
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     db: db_dep,
+    current_user: current_user_dep,
     period_month: date | None = Query(
         None, description="Month of the summary (defaults to current month)"
     ),
 ) -> DashboardSummaryResponse:
-    """Retrieve total spent, recent expenses, and budget warnings for the dashboard."""
+    """Retrieve total spent, recent expenses, and budget warnings for authenticated user."""
     if period_month is None:
         period_month = date.today()
-    return await dashboard_service.get_summary(db, period_month)
+    return await dashboard_service.get_summary(db, current_user.id, period_month)
 
 
 @router.get("/charts/category-breakdown", response_model=list[CategoryBreakdownItem])
 async def get_category_breakdown(
     db: db_dep,
+    current_user: current_user_dep,
     date_from: date | None = Query(None, description="Filter start date"),
     date_to: date | None = Query(None, description="Filter end date"),
 ) -> list[CategoryBreakdownItem]:
-    """Retrieve category-wise spending data suitable for pie/donut charts."""
-    return await dashboard_service.get_category_breakdown(db, date_from, date_to)
+    """Retrieve category-wise spending data for authenticated user."""
+    return await dashboard_service.get_category_breakdown(db, current_user.id, date_from, date_to)
 
 
 @router.get("/charts/spending-trend", response_model=list[SpendingTrendItem])
 async def get_spending_trend(
     db: db_dep,
+    current_user: current_user_dep,
     period: Literal["daily", "weekly", "monthly"] = Query(
         "daily", description="Time interval grouping basis"
     ),
     date_from: date | None = Query(None, description="Filter start date"),
     date_to: date | None = Query(None, description="Filter end date"),
 ) -> list[SpendingTrendItem]:
-    """Retrieve spending data points mapped over time (daily, weekly, monthly intervals)."""
+    """Retrieve spending data points mapped over time for authenticated user."""
     return await dashboard_service.get_spending_trend(
-        db, period, date_from, date_to
+        db, current_user.id, period, date_from, date_to
     )
 
 
 @router.get("/reports", response_model=list[SpendingTrendItem])
 async def get_reports_breakdown(
     db: db_dep,
+    current_user: current_user_dep,
     period: Literal["daily", "weekly", "monthly"] = Query(
         "monthly", description="Report interval basis"
     ),
 ) -> list[SpendingTrendItem]:
-    """Retrieve periodic breakdown reports of spending."""
-    # This matches spending trend but defaults to full history / standard ranges
-    return await dashboard_service.get_spending_trend(db, period)
+    """Retrieve periodic breakdown reports of spending for authenticated user."""
+    return await dashboard_service.get_spending_trend(db, current_user.id, period)
 
 
 @router.get("/comparison", response_model=MoMComparisonResponse)
-async def get_mom_comparison(db: db_dep) -> MoMComparisonResponse:
-    """Retrieve month-over-month total spending comparison and percentage change."""
-    return await dashboard_service.get_comparison(db)
+async def get_mom_comparison(
+    db: db_dep,
+    current_user: current_user_dep,
+) -> MoMComparisonResponse:
+    """Retrieve month-over-month total spending comparison and percentage change for authenticated user."""
+    return await dashboard_service.get_comparison(db, current_user.id)
 
 
 @router.get("/top-categories", response_model=list[TopCategoryItem])
 async def get_top_categories(
     db: db_dep,
+    current_user: current_user_dep,
     limit: int = Query(5, ge=1, description="Number of top categories to return"),
 ) -> list[TopCategoryItem]:
-    """Retrieve top categories sorted by spending."""
-    return await dashboard_service.get_top_categories(db, limit)
+    """Retrieve top categories sorted by spending for authenticated user."""
+    return await dashboard_service.get_top_categories(db, current_user.id, limit)
 
 
 @router.get("/average-spend", response_model=AverageSpendResponse)
 async def get_average_spend(
     db: db_dep,
+    current_user: current_user_dep,
     basis: Literal["daily", "weekly"] = Query(
         "daily", description="Average frequency basis"
     ),
 ) -> AverageSpendResponse:
-    """Retrieve average daily/weekly spending rate in the current month."""
-    return await dashboard_service.get_average_spend(db, basis)
+    """Retrieve average daily/weekly spending rate in the current month for authenticated user."""
+    return await dashboard_service.get_average_spend(db, current_user.id, basis)
 
 
 @router.get("/charts/payment-mode-breakdown", response_model=list[PaymentModeBreakdownItem])
 async def get_payment_mode_breakdown(
     db: db_dep,
+    current_user: current_user_dep,
     date_from: date | None = Query(None, description="Filter start date"),
     date_to: date | None = Query(None, description="Filter end date"),
 ) -> list[PaymentModeBreakdownItem]:
-    """Retrieve payment-mode-wise spending data suitable for pie/donut charts."""
-    return await dashboard_service.get_payment_mode_breakdown(db, date_from, date_to)
+    """Retrieve payment-mode-wise spending data for authenticated user."""
+    return await dashboard_service.get_payment_mode_breakdown(db, current_user.id, date_from, date_to)

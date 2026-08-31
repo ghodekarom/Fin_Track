@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from typing import AsyncGenerator
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -6,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy import pool
 
 from app.config import settings
-from app.db.base import Base
+from app.core.security import create_access_token, hash_password
+from app.db.base import Base, User
 from app.db.session import get_db
 from app.main import app
 
@@ -61,7 +63,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
-    """Provide an HTTP client configured with db session overrides."""
+    """Provide an unauthenticated HTTP client configured with db session overrides."""
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         async_session = async_sessionmaker(
             bind=test_engine,
@@ -78,3 +80,58 @@ async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def test_user(db_session: AsyncSession) -> User:
+    """Create a primary test user."""
+    user = User(
+        id=uuid.uuid4(),
+        email="testuser@example.com",
+        hashed_password=hash_password("Password123!"),
+        full_name="Primary Test User",
+        is_verified=True,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def auth_headers(test_user: User) -> dict[str, str]:
+    """Generate authorization Bearer header for test_user."""
+    token = create_access_token(subject=str(test_user.id), email=test_user.email)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+async def auth_client(client: AsyncClient, auth_headers: dict[str, str]) -> AsyncClient:
+    """Provide an HTTP client authenticated as test_user."""
+    client.headers.update(auth_headers)
+    return client
+
+
+@pytest.fixture
+async def second_user(db_session: AsyncSession) -> User:
+    """Create a secondary test user for cross-user data isolation tests."""
+    user = User(
+        id=uuid.uuid4(),
+        email="seconduser@example.com",
+        hashed_password=hash_password("Password123!"),
+        full_name="Secondary Test User",
+        is_verified=True,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def second_auth_headers(second_user: User) -> dict[str, str]:
+    """Generate authorization Bearer header for second_user."""
+    token = create_access_token(subject=str(second_user.id), email=second_user.email)
+    return {"Authorization": f"Bearer {token}"}

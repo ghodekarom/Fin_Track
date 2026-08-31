@@ -67,40 +67,61 @@ Everything else (login, recurring expenses, notifications, multi-user support, b
 
 ---
 
-## 6. Scope (V1 / MVP)
+## 6. Scope (V1 / MVP with Secure Authentication)
 
-**✅ In-Scope (V1):**
-- Full CRUD on expenses (Add / View / Edit / Delete)
-- Categories the user creates and manages themselves (not a fixed list)
-- Dashboard with total spend + charts (pie/donut + bar/line)
-- Search, filter, and sort on expenses (usable together)
-- Budget goal setting (overall + per-category) with live remaining-balance tracking
-- Simple navigation (hamburger menu: Dashboard, Expenses)
-- Field validation (positive amount, no future-dated expenses)
-- Empty, loading, and error states for all screens
-- Single fixed currency display (₹ / INR, 2 decimal places)
+**✅ In-Scope:**
+- **User Authentication & Accounts:**
+  - Secure Sign Up / Registration (Email & Password)
+  - Secure Login / Sign In (Email & Password)
+  - One-click Google Sign-In (OAuth 2.0 / OpenID Connect)
+  - Secure Logout (current device and logout from all devices/sessions)
+  - Forgot Password & Password Reset via email
+  - Change Password from user settings
+- **User Data Isolation (Strict Privacy):**
+  - Complete data privacy: every user only accesses, manages, and views their own personal expenses, categories, and budgets.
+  - Zero cross-user visibility or tampering.
+- **Expense Tracking & Management:**
+  - Full CRUD on expenses (Add / View / Edit / Delete)
+  - Categories the user creates and manages themselves (plus starter categories)
+  - Dashboard with total spend + charts (pie/donut + bar/line)
+  - Search, filter, and sort on expenses (usable together)
+  - Budget goal setting (overall + per-category) with live remaining-balance tracking
+  - Simple, responsive navigation (Dashboard, Expenses, Categories, Budgets, User Profile/Logout)
+  - Field validation (positive amount, no future-dated expenses, strong password requirements)
+  - Empty, loading, and error states for all screens
+  - Single fixed currency display (₹ / INR, 2 decimal places)
 
-**❌ Out-of-Scope (V1):**
-- Login / multiple user accounts
+**❌ Out-of-Scope:**
+- Admin roles / Role-Based Access Control (RBAC) — every user is a peer with access only to their own personal data
 - Recurring or auto-scheduled expenses
 - Multiple currencies
 - Bank / UPI / SMS auto-import
 - Income tracking
-- Notifications / reminders
-- Report export (PDF/Excel/CSV) — nice-to-have only if time permits, otherwise Phase 2
-- Dedicated mobile app (V1 is a responsive web app only — usable on mobile browsers, not a native app)
-
-*(These move into later phases — see Section 13.)*
+- Report export (PDF/Excel/CSV) — nice-to-have only if time permits, otherwise Phase 3
+- Dedicated native mobile app (responsive web app / PWA with offline support)
 
 ---
 
 ## 7. Functional Requirements & User Stories
 
+### 7.0 User Accounts & Authentication
+
+| ID | Requirement | Priority | User Story |
+|----|-------------|----------|------------|
+| FR-0.1 | **Sign Up / Register** | P0 | As a new user, I want to create an account with my email and password so my financial data is securely saved. |
+| FR-0.2 | **Login / Sign In** | P0 | As a returning user, I want to sign in with my credentials to access my personal financial records. |
+| FR-0.3 | **Sign in with Google** | P0 | As a user, I want to sign in with my Google account with one click for fast and easy access. |
+| FR-0.4 | **Logout** | P0 | As a user, I want to log out of my account securely so nobody else using my browser can view my financial logs. |
+| FR-0.5 | **Logout All Devices** | P1 | As a user, I want an option to sign out of all active sessions across all devices for security. |
+| FR-0.6 | **Forgot & Reset Password** | P0 | As a user who forgot their password, I want to receive a secure password reset link by email to regain account access. |
+| FR-0.7 | **Change Password** | P1 | As an authenticated user, I want to update my password from my account settings. |
+| FR-0.8 | **User Data Isolation** | P0 | As a user, I want complete privacy so that only I can see, edit, or delete my expenses, categories, and budgets, and no other user can ever access or tamper with my data. |
+
 ### 7.1 Navigation
 
 | ID | Requirement | Priority | User Story |
 |----|-------------|----------|------------|
-| FR-1 | Hamburger menu with two sections: **Dashboard** (view-only summary) and **Expenses** (add/edit/delete/search/filter/sort) | P0 | As a user, I want a simple hamburger menu so I can move between my Dashboard and my Expenses easily. |
+| FR-1 | Responsive navigation menu with sections: **Dashboard**, **Expenses**, **Categories**, **Budgets**, and **Account / Logout** | P0 | As a user, I want clear navigation so I can move between sections and manage my account easily. |
 
 ### 7.2 Expense Fields & Validation
 
@@ -110,7 +131,7 @@ When adding an expense, the user fills in:
 - **Amount** — how much was spent (displayed as ₹ with 2 decimal places, e.g. ₹1,234.00)
 - **Date** — defaults to today, can be changed
 - **Notes** (optional) — any extra detail
-- **Payment Mode** (optional) — e.g. Cash, Card, UPI
+- **Payment Mode** (optional) — e.g. Cash, Card, UPI, Other
 
 | Validation Rule | Why |
 |------------------|-----|
@@ -122,31 +143,31 @@ When adding an expense, the user fills in:
 
 | ID | Action | Description | Priority | User Story |
 |----|--------|--------------|----------|------------|
-| FR-2 | Add | Create a new expense entry | P0 | As a user, I want to quickly add an expense so that logging spending doesn't feel like a chore. |
-| FR-3 | View | See all logged expenses in a paginated list | P0 | As a user, I want to view my past expenses so I can review my spending history. |
-| FR-4 | Edit | Update any field of an existing expense | P0 | As a user, I want to edit my past expenses so my records stay accurate. |
-| FR-5 | Delete | Remove an expense, with a confirmation step to avoid deleting by mistake | P0 | As a user, I want to delete an expense (with confirmation) so I don't lose data by accident. |
+| FR-2 | Add | Create a new expense entry linked to the logged-in user | P0 | As a user, I want to quickly add an expense so that logging spending doesn't feel like a chore. |
+| FR-3 | View | See all logged expenses belonging only to the logged-in user in a paginated list | P0 | As a user, I want to view my past expenses so I can review my spending history. |
+| FR-4 | Edit | Update any field of the user's own existing expense | P0 | As a user, I want to edit my past expenses so my records stay accurate. |
+| FR-5 | Delete | Remove the user's own expense, with a confirmation step | P0 | As a user, I want to delete an expense (with confirmation) so I don't lose data by accident. |
 
 ### 7.4 Category Management
 
-Categories are dynamic — the user builds their own list instead of picking from a fixed set.
+Categories are dynamic — users have starter categories and can build their own custom categories.
 
 | ID | Action | Description | Priority | User Story |
 |----|--------|--------------|----------|------------|
-| FR-6 | Create | Add a new category by name while logging an expense, or from a category list | P0 | As a user, I want to create my own categories so my spending is organized the way I actually think about it. |
-| FR-7 | Edit | Rename an existing category | P0 | As a user, I want to rename a category so I can keep my organization consistent over time. |
-| FR-8 | Delete | Remove a category — only if unused, or reassign/cascade linked expenses with a warning | P0 | As a user, I want to safely delete a category without accidentally losing or orphaning expense data. |
-| FR-9 | View | See the list of categories along with how many expenses use each one | P1 | As a user, I want to see how many expenses are in each category so I understand my category usage. |
-| FR-10 | Default Categories | Ship with a few common starter categories (Food, Transport, Rent, etc.) so the app isn't empty on first use | P2 | As a new user, I want to see some starter categories so the app feels usable from day one. |
+| FR-6 | Create | Add a new user-scoped category by name | P0 | As a user, I want to create my own categories so my spending is organized the way I actually think about it. |
+| FR-7 | Edit | Rename a user's category | P0 | As a user, I want to rename a category so I can keep my organization consistent over time. |
+| FR-8 | Delete | Remove a category safely (reassign expenses or cascade with confirmation) | P0 | As a user, I want to safely delete a category without accidentally losing or orphaning expense data. |
+| FR-9 | View | See user's active categories and linked expense counts | P1 | As a user, I want to see how many expenses are in each category so I understand my category usage. |
+| FR-10 | Default Categories | Ship with common starter categories (Food, Transport, Rent, etc.) for new accounts | P2 | As a new user, I want to see some starter categories so the app feels usable from day one. |
 
 ### 7.5 Search, Filter & Sort
 
-On the Expenses screen, all capabilities below should work together (e.g. filter by "Food" category, then sort by highest amount).
+On the Expenses screen, all capabilities below work together on the user's personal expenses:
 
 | ID | Capability | Details | Priority | User Story |
 |----|------------|---------|----------|------------|
 | FR-11 | Search | By title or notes text | P1 | As a user, I want to search my expenses by title or note so I can quickly find a specific transaction. |
-| FR-12 | Filter — Date Range | e.g. this week, this month | P0 | As a user, I want to filter expenses by date range so I can review a specific period. |
+| FR-12 | Filter — Date Range | e.g. this week, this month, custom range | P0 | As a user, I want to filter expenses by date range so I can review a specific period. |
 | FR-13 | Filter — Category | Isolate spend on a specific category | P0 | As a user, I want to filter by category so I can see how much I spent in one area. |
 | FR-14 | Filter — Amount Range | Narrow down to a spend bracket | P1 | As a user, I want to filter by amount range so I can find larger or smaller transactions. |
 | FR-15 | Filter — Payment Mode | Separate cash vs card vs UPI spend | P1 | As a user, I want to filter by payment mode so I can see how I paid for things. |
@@ -168,32 +189,28 @@ On the Expenses screen, all capabilities below should work together (e.g. filter
 
 ### 7.7 Budget / Spending Goal
 
-The user can set a spending goal (e.g. a monthly limit, or a per-category limit). The app automatically shows:
+The user can set personal spending goals (overall or category-specific):
 - Total spent so far in that period
 - Remaining budget = Goal − Spent
 - A simple status: **on track / near limit / over budget**
 
-The user can update the goal anytime, and everything updates instantly.
-
 | ID | Requirement | Priority | User Story |
 |----|-------------|----------|------------|
-| FR-26 | Set an overall monthly budget goal and per-category budget limits | P0 | As a user, I want to set a budget goal so I can catch overspending early. |
+| FR-26 | Set overall monthly budget goal and per-category budget limits | P0 | As a user, I want to set a budget goal so I can catch overspending early. |
 | FR-27 | Live remaining-balance tracking as expenses are added | P0 | As a user, I want to see my remaining budget update live as I add expenses so I always know where I stand. |
 | FR-28 | Alert/status indicator when nearing or exceeding a limit | P1 | As a user, I want to be warned when I'm close to or over a budget limit so I can adjust my spending in time. |
-
-*Why this matters: this turns the app from "just a log" into a real budgeting tool — this is the heart of V1.*
 
 ### 7.8 Data Export (Nice-to-Have)
 
 | ID | Requirement | Why | Priority | User Story |
 |----|-------------|-----|----------|------------|
-| FR-29 | Export expenses (filtered or full) as CSV/PDF/Excel | Backup and analysis outside the app | P2 | As a user, I want to export my expenses so I can back them up or analyze them outside the app. |
+| FR-29 | Export personal expenses as CSV/PDF/Excel | Backup and analysis outside the app | P2 | As a user, I want to export my expenses so I can back them up or analyze them outside the app. |
 
-### 7.9 Data Integrity Principle
+### 7.9 Data Integrity & Privacy Principle
 
 | ID | Requirement | Priority | User Story |
 |----|-------------|----------|------------|
-| FR-30 | No hardcoded/demo data at any stage — all data is dynamically created, stored, and fetched from the real data layer (see Section 9) | P0 | As a new user, I want to see an honest empty state built from real, dynamically generated data, so the app reflects my actual usage from day one. |
+| FR-30 | Live Data & Absolute Isolation — All data is securely bound to the authenticated user with zero cross-user access or mock financial data | P0 | As a user, I want full assurance that my financial data is real, private, and inaccessible to any other user. |
 
 ---
 
@@ -201,100 +218,37 @@ The user can update the goal anytime, and everything updates instantly.
 
 | Flow | Steps |
 |------|-------|
-| 🟢 Add an expense | Expenses → Add New → Fill form (pick or create a category) → Save → Expense appears in list, dashboard totals update |
-| 🟢 Check spending | Dashboard → See total spent, charts, and budget status |
-| 🟢 Find a past expense | Expenses → Search / Filter / Sort → Find it → Edit or Delete |
-| 🟢 Set a budget goal | Set spending limit → Dashboard shows remaining balance, updates live as expenses are added |
+| 🟢 Sign Up / Login | Open App → Register or Sign in (Password or Google) → Lands on personal Dashboard |
+| 🟢 Add an Expense | Expenses → Add New → Fill form (pick/create category) → Save → Appears in list, dashboard updates |
+| 🟢 Check Spending & Budget | Dashboard → View personal total spent, charts, recent logs, and budget alerts |
+| 🟢 Manage Categories & Budgets | Create/rename/delete custom categories, configure monthly limits |
+| 🟢 Password Recovery | Forgot Password → Enter email → Click reset link from email → Set new password → Login |
+| 🟢 Secure Logout | User profile menu → Logout (or Logout from all devices) → Session cleared, redirect to login |
 
 ---
 
 ## 9. Non-Functional Requirements
 
-- **Performance:** Dashboard and reports must load with real, database-driven data (no hardcoded/static values) at any data volume.
-- **Scalability:** Architecture should support later phases (Section 13) without major rework.
-- **Data Integrity:** No hardcoded or dummy data in any phase — see Section 9.1.
-- **Testability:** Every feature/module must be independently testable before deployment.
-- **Reliability:** Each phase must be fully functional (run → test → deploy) before the next phase begins.
-- **Deployment (V1):** Local or private deployment — no public internet exposure planned for V1, since there is no login/auth layer yet.
-
-### 9.1 Development Principle (Applies to All Phases)
-
-> **No hardcoded/dummy data in any phase.** All data (expenses, categories, budgets, reports) must be dynamically created, stored, and fetched from the actual data layer (database/API), even in early phases. Every phase must independently follow the **Run → Test → Deploy** cycle before moving to the next phase.
-
----
-
-## 10. Definition of Done (V1)
-
-- User can Add, View, Edit, and Delete expenses
-- Categories are dynamic — user can create, edit, and delete their own
-- Dashboard shows total spend, a recent-expenses snapshot, and at least 2 charts
-- Expenses section supports search + at least 2 filters + at least 2 sort options, usable together
-- User can set a budget goal and see a live remaining balance with status (on track/near limit/over budget)
-- Hamburger menu navigation works between Dashboard and Expenses
-- Amount and date fields are validated (positive amount, no future dates)
-- No hardcoded/demo data anywhere in the app — all data is live and dynamic
-- Deployed and tested end-to-end before moving to Phase 2
+- **Security & Privacy:**
+  - Industry-standard password hashing (BCrypt / Argon2). No plaintext passwords stored.
+  - Modern token security (short-lived access tokens, secure rotated refresh cookies).
+  - Secure session revocation and logout from all devices.
+  - Rate limiting on authentication endpoints to prevent brute-force attacks.
+  - Strict user-level data isolation on every action.
+- **Performance:** Sub-second response times for dashboard, filters, and reports with real database data.
+- **Scalability:** Stateless backend architecture with horizontal scalability.
+- **Data Integrity:** Real, user-owned data only. No hardcoded or demo data.
+- **Testability & Reliability:** Full test coverage across authentication, authorization isolation, and financial CRUD operations before deployment.
 
 ---
 
-## 11. Assumptions & Risks
+## 10. Definition of Done
 
-**Assumptions:**
-- Single-user app in V1 — no login needed
-- One fixed currency (e.g. INR) — no multi-currency support in V1
-- Budget goal defaults to monthly
-- Expense date should be today or earlier (not future-dated)
-- Local or private deployment for V1 (no public internet exposure)
-
-**Risks:**
-- Scope creep if later-phase features get pulled into V1
-- Data accuracy risk if hardcoded/test data isn't fully replaced with real data before deployment
-- Security risk with financial data once login/multi-device sync is introduced, if auth isn't properly tested each phase
-
----
-
-## 12. Stakeholders
-
-- Product Owner
-- Development Team
-- QA/Testing Team
-- End Users (primary feedback source for each phase)
-
----
-
-## 13. Future Scope — Phase-wise Roadmap
-
-| Phase | Theme | Features | Run-Test-Deploy Requirement |
-|-------|-------|----------|------------------------------|
-| **Phase 1 (V1 / MVP)** | Core Loop | Full expense CRUD, dynamic categories, dashboard with charts, search/filter/sort, budget goal with live balance, hamburger navigation | Build with live data layer, unit + integration test, deploy as standalone working app |
-| **Phase 2** | Login, Sync & Convenience | Login & multi-device sync, income tracking, recurring expenses (rent, subscriptions, EMI), receipt photo upload, multiple wallets/accounts (cash, bank, card), report export (PDF/Excel/CSV), dark mode | Each feature tested against real stored data, deployed as an update to Phase 1 app |
-| **Phase 3** | Social/Sharing | Split expenses (roommates/friends), shared budgets, multi-user/family accounts | Multi-user data flow tested for accuracy before deployment |
-| **Phase 4** | Smart & Advanced | Savings goals, multi-currency support, AI-based spend prediction, auto-categorization, bank/UPI/SMS auto-import, budget notifications, calendar heatmap of spend, year-view trends | AI/ML and integration modules tested independently, then deployed with monitoring |
-| **Phase 5** | Security & Personalization | Biometric lock, cloud backup, custom themes, reminders/notifications | Security features tested for edge cases (failed auth, sync conflicts) before deployment |
-| **Phase 6** | Monetization | Free vs Premium plans, ads (free tier) | Payment/subscription flow tested in sandbox before production deployment |
-
----
-
-## 14. Dependencies
-
-- Database/backend for persistent storage of expenses, categories, budgets
-- Charting library for dashboard visualizations (pie/donut + bar/line)
-- Authentication mechanism (introduced Phase 2 onward — PIN, later biometric)
-- Export library for CSV/PDF/Excel (Phase 1 nice-to-have, full in Phase 2)
-- Notification system (budget alerts, reminders — Phase 5)
-- Payment gateway (Phase 6, for premium plans)
-
----
-
-## 15. Timeline (Illustrative — to be finalized with dev team)
-
-| Phase | Estimated Duration |
-|-------|----------------------|
-| Phase 1 (V1 / MVP) | To be defined based on team capacity |
-| Phase 2 | To be defined post Phase 1 review |
-| Phase 3 | To be defined post Phase 2 review |
-| Phase 4 | To be defined post Phase 3 review |
-| Phase 5 | To be defined post Phase 4 review |
-| Phase 6 | To be defined post Phase 5 review |
-
-*Note: Each phase's timeline should only be finalized after the previous phase is successfully run, tested, and deployed.*
+- User can register, login, sign in with Google, reset password, and securely log out.
+- User data is completely isolated: User A cannot see, edit, or delete User B's data under any condition.
+- User can Add, View, Edit, and Delete expenses.
+- User can create, edit, and delete custom categories.
+- User can set budget goals and monitor live remaining balance with warning alerts.
+- Dashboard renders accurate charts and summaries based strictly on the logged-in user's data.
+- Automated tests pass for authentication, authorization, and core expense workflows.
+- Deployed and verified on production environments with HTTPS and secure cookie handling.

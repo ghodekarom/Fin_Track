@@ -21,6 +21,30 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
 
+    # Authentication & JWT Configuration
+    JWT_SECRET: str = "fintrack_jwt_super_secret_dev_key_change_in_production_min32chars"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+
+    # Google OAuth 2.0 / OpenID Connect
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+
+    # SMTP / Email Configuration (Password Reset & Verification)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAILS_FROM_EMAIL: str = "noreply@fintrack.app"
+    EMAILS_FROM_NAME: str = "FinTrack"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # Rate Limiting
+    AUTH_RATE_LIMIT: str = "10/minute"
+    LOGIN_RATE_LIMIT: str = "5/minute"
+    PASSWORD_RESET_RATE_LIMIT: str = "3/15minutes"
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def assemble_db_connection(cls, v: str) -> str:

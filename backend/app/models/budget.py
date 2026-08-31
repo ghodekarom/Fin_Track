@@ -1,11 +1,16 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.category import Category
 
 
 class Budget(Base):
@@ -13,6 +18,11 @@ class Budget(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     scope: Mapped[str] = mapped_column(String(10), nullable=False)
     category_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -33,6 +43,7 @@ class Budget(Base):
     )
 
     # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="budgets")
     category: Mapped["Category"] = relationship("Category", back_populates="budgets")
 
     __table_args__ = (
@@ -40,22 +51,22 @@ class Budget(Base):
         CheckConstraint(
             "scope IN ('overall', 'category')", name="check_budgets_scope"
         ),
-        # Ensure category_id is NULL for overall budget, and NOT NULL for category budget
         CheckConstraint(
             "(scope = 'overall' AND category_id IS NULL) OR (scope = 'category' AND category_id IS NOT NULL)",
             name="check_budgets_category_id_scope_nullability",
         ),
-        # Enforce unique constraint for overall budget per month
+        Index("idx_budgets_user_id", user_id),
         Index(
-            "idx_budgets_unique_overall",
+            "idx_budgets_unique_user_overall",
+            user_id,
             scope,
             period_month,
             unique=True,
             postgresql_where=(category_id.is_(None)),
         ),
-        # Enforce unique constraint for category budget per category per month
         Index(
-            "idx_budgets_unique_category",
+            "idx_budgets_unique_user_category",
+            user_id,
             scope,
             category_id,
             period_month,

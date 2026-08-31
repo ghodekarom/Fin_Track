@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.health import router as health_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.exceptions import setup_exception_handlers
+from app.core.limiter import limiter
 from app.core.logging import setup_logging
 from app.db.base import Base
 from app.db.session import engine
@@ -17,9 +20,6 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is initialized
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     # Auto-seed default categories
     try:
         await seed_categories()
@@ -32,13 +32,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Backend API for FinTrack Personal Expense Tracker (V1/MVP)",
-    version="1.0.0",
+    description="Backend API for FinTrack Personal Expense Tracker with Authentication & Data Isolation",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
 )
+
+# Attach rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Setup CORS origins
 cors_origins = []
@@ -53,12 +57,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins if not is_wildcard else ["*"],
     allow_origin_regex=r"https://.*\.vercel\.app" if not is_wildcard else None,
-    allow_credentials=not is_wildcard,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register central exception handlers (centralized error shapes mapping)
+# Register central exception handlers
 setup_exception_handlers(app)
 
 # Mount direct health check for platforms like Render/Kubernetes
