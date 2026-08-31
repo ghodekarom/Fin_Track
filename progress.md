@@ -1,59 +1,60 @@
-# FinTrack — Session Progress Report
+# FinTrack — Session Progress & Memory Report
 
-## Session Date: 2026-08-26
-**Current Branch:** `main`
+## Session Date: 2026-08-31
+**Current Branch:** `main`  
+**Latest Commit:** `58a467b` (`feat(auth): implement production-ready JWT auth, Google OIDC, and strict user data isolation`)
 
 ---
 
 ## 1. Accomplishments in This Session
-- **Document Analysis:** 
-  - Read and analyzed the Product Requirements Document (PRD) at [FinTrack_PRD.md](file:///d:/FinTrack/docs/FinTrack_PRD.md).
-  - Read and analyzed the Software Requirements Specification (SRS) at [FinTrack_SRS.md](file:///d:/FinTrack/docs/FinTrack_SRS.md).
-  - Analyzed and registered all core rules inside [fintrack_agents.md](file:///d:/FinTrack/fintrack_agents.md).
-- **Backend Scaffold & Directory Setup:**
-  - Created root configuration files, build files, and empty folder layout under `backend/`.
-- **Database & Migration Config:**
-  - Configured PostgreSQL settings in `.env`.
-  - Implemented database models for `Category`, `Expense`, and `Budget`.
-  - Setup async Alembic migrations and generated the initial schema revision (`df6062071a5c_initial_schema.py`).
-  - Successfully ran `alembic upgrade head` to configure tables and constraints on the local PostgreSQL server.
-- **Backend & Logic Implementations:**
-  - Programmed Category CRUD, Expense paging/filtering, Budget warning systems, and Dashboard Mom trend analyses.
-  - Created validation schemas using Pydantic, including response schemas to handle SQLAlchemy serialization safely.
-  - Wired routes, exception handlers, middlewares, and startup/shutdown lifecycle hooks in `main.py`.
-- **Database Seeding:**
-  - Successfully seeded default categories (`Food`, `Transport`, `Rent`, `Utilities`, `Shopping`, `Entertainment`, `Health`, `Other`) using our custom seed script.
-- **Testing & Verification:**
-  - Programmed an isolated, session-scoped pytest async configuration using SQLAlchemy `NullPool` to bypass connection concurrency issues.
-  - Wrote and verified **12 unit and integration tests** (all passing successfully).
-- **Frontend Scaffolding & Theme Config:**
-  - Initialized Next.js 14 App Router, TypeScript, PostCSS, and Tailwind CSS.
-  - Set up a premium Slate/Emerald dark mode theme with custom glassmorphism styles and scrollbars.
-  - Programmed responsive `AppShell` with mobile drawer navigation, hamburger toggles, and UI status components (`EmptyState`, `LoadingState`, `ErrorState`).
-- **REST Client & React Query Hooks:**
-  - Setup typed Axios API client wrapping FastAPI validation errors.
-  - Implemented custom TanStack Query hooks for Categories, Expenses, Budgets, and Dashboard analytics.
-- **Frontend Views & Data Visualization:**
-  - Created ledger log view with paginated lists, mode badges, search filters, date ranges, and sorting.
-  - Designed Dashboard cards (MoM tracking, Daily Average spend, Overall target tracker).
-  - Integrated Recharts Area line trend models and Pie breakdown donut models.
-  - Coded safe category delete wizard (with reassignment/force choices) and budget target modals.
-- **Form Validations & Inline Fixes:**
-  - Integrated client-side Zod validators with React Hook Form.
-  - Solved an inline category creation bug by updating the `category_id` Zod schema to allow the `"NEW_CATEGORY"` literal value alongside UUIDs.
-  - Verified and successfully passed production compilation checks (`npm run build`) with zero type errors.
 
+### A. Non-Technical & Technical Requirements Update
+- **PRD Updated:** Updated [FinTrack_PRD.md](file:///d:/FinTrack/docs/FinTrack_PRD.md) with complete non-technical user stories covering user accounts, authentication workflows, password resets, and user data isolation.
+- **SRS Updated:** Updated [FinTrack_SRS.md](file:///d:/FinTrack/docs/FinTrack_SRS.md) to technical v4.0 detailing JWT specifications (HS256, 15m access / 14d refresh), Refresh Token Rotation (RTR), reuse detection, `HttpOnly` cookie policies, Google OIDC backend verification, and strict user isolation queries.
+
+### B. Backend Authentication & Security Architecture
+- **Dependencies Installed:** `python-jose[cryptography]`, `bcrypt`, `google-auth`, `requests`, `email-validator`, `slowapi`, `httpx`.
+- **Configuration:** Updated [config.py](file:///d:/FinTrack/backend/app/config.py) and [backend/.env.example](file:///d:/FinTrack/backend/.env.example) to support all JWT, Google OAuth, SMTP email, and rate-limiting environment variables.
+- **Security Core ([security.py](file:///d:/FinTrack/backend/app/core/security.py)):** Direct bcrypt password hashing (rounds=12), SHA-256 token hashing, high-entropy random token generation, and HS256 JWT access token signing/decoding.
+- **Rate Limiting ([limiter.py](file:///d:/FinTrack/backend/app/core/limiter.py)):** Integrated `slowapi` rate limiter on auth routes (`login`: 5/min, `auth`: 10/min, `reset`: 3/min).
+- **Database Models & Alembic Migration:**
+  - Added [user.py](file:///d:/FinTrack/backend/app/models/user.py) (`User`), [refresh_token.py](file:///d:/FinTrack/backend/app/models/refresh_token.py) (`RefreshToken`), and [password_reset.py](file:///d:/FinTrack/backend/app/models/password_reset.py) (`PasswordResetToken`).
+  - Updated `Expense`, `Budget`, `Category` models with `user_id` foreign keys and indices.
+  - Generated and successfully executed migration `8b1850972073_add_auth_and_user_data_isolation.py` on remote PostgreSQL/Supabase database.
+- **Services & Routes:**
+  - [auth_service.py](file:///d:/FinTrack/backend/app/services/auth_service.py): Registration, login, Google OIDC ID token verification, refresh token rotation (with reuse detection that invalidates all sessions upon token replay), session revocation, password reset, and change password.
+  - [email_service.py](file:///d:/FinTrack/backend/app/services/email_service.py): Asynchronous password reset dispatcher with development console fallback.
+  - [auth.py](file:///d:/FinTrack/backend/app/api/v1/auth.py): Mounted `/api/auth/*` router (`/register`, `/login`, `/google`, `/refresh`, `/logout`, `/logout-all`, `/forgot-password`, `/reset-password`, `/change-password`, `/me`).
+
+### C. Strict User Data Isolation
+- `get_current_user` in [deps.py](file:///d:/FinTrack/backend/app/api/deps.py) decodes the Bearer JWT and injects `current_user`. The API never accepts or trusts client-supplied `user_id`.
+- Updated [expense_service.py](file:///d:/FinTrack/backend/app/services/expense_service.py), [budget_service.py](file:///d:/FinTrack/backend/app/services/budget_service.py), [category_service.py](file:///d:/FinTrack/backend/app/services/category_service.py), and [dashboard_service.py](file:///d:/FinTrack/backend/app/services/dashboard_service.py) so that **every query and database operation is strictly scoped to `user_id == current_user.id`**.
+- Default starter categories (`user_id IS NULL`) are globally accessible read-only; user custom categories are private and editable/deletable only by their creator.
+
+### D. Frontend Authentication & UI Pages
+- **Installed `@react-oauth/google`** for frontend Google Identity Services.
+- **API Client ([api-client.ts](file:///d:/FinTrack/frontend/src/lib/api-client.ts)):** Configured `withCredentials: true`, in-memory token state, Bearer request interceptor, and 401 response interceptor with silent token refresh queue.
+- **Auth Context & Hook ([AuthContext.tsx](file:///d:/FinTrack/frontend/src/context/AuthContext.tsx), [useAuth.ts](file:///d:/FinTrack/frontend/src/hooks/useAuth.ts)):** Provides user state, silent initialization on app load, login, registration, Google auth, logout, and multi-device logout.
+- **New Auth UI Pages:**
+  - [Login Page](file:///d:/FinTrack/frontend/src/app/login/page.tsx): Glassmorphism dark UI, email/password validation, Google Sign-In button.
+  - [Register Page](file:///d:/FinTrack/frontend/src/app/register/page.tsx): Account creation with password confirmation and Google Sign-In.
+  - [Forgot Password Page](file:///d:/FinTrack/frontend/src/app/forgot-password/page.tsx): Email dispatch form with clear status feedback.
+  - [Reset Password Page](file:///d:/FinTrack/frontend/src/app/reset-password/page.tsx): Token-validated password update form.
+- **AppShell ([AppShell.tsx](file:///d:/FinTrack/frontend/src/components/layout/AppShell.tsx)):** Route protection (redirects unauthenticated users to `/login`), clean auth layout, profile avatar, user email badge, and dropdown menu with "Log Out" and "Log Out All Devices".
+
+### E. Verification & Testing
+- **Backend Tests:** **23 / 23 pytest tests passed (100%)** including `test_auth.py` and `test_data_isolation.py` (cross-user data access barriers).
+- **Frontend Tests & Build:** `npm test` passed (1/1) and `npm run build` compiled cleanly with 0 TypeScript/ESLint errors across all 14 routes.
+- **Git:** All work committed and pushed to `origin/main` (commit `58a467b`).
 
 ---
 
 ## 2. Current Project State
-- **Backend:** Fully implemented, verified, and stable. Database schema is populated and seeded.
-- **Frontend:** Next.js 14+ (App Router, TypeScript) application fully configured and implemented. Wired with Axios API clients, TanStack Query hooks, Recharts analytics, and Zod validator forms. Builds and compiles successfully.
+- **Backend:** Production-ready FastAPI service with secure JWT auth, Google OIDC token verification, refresh token rotation, rate limiting, and strict user data isolation.
+- **Frontend:** Next.js 14 App Router application with full auth context, silent token refresh, sleek auth views, protected dashboard/expense/category routes, and profile session controls.
 
 ---
 
-## 3. Next Steps (For the Next Session)
-1. **End-to-End Verification:** Run frontend and backend together locally to test full CRUD flows, charts, and budget threshold warnings in the browser.
-2. **Testing Suite:** Add Vitest component unit tests and Playwright end-to-end spec tests for validation logic.
-3. **Deployment Setup:** Configure Docker containers (`Dockerfile` and `docker-compose.yml`) for multi-container local orchestration, and prepare production deployments on Render/Vercel.
-
+## 3. Server Startup Commands
+- **Backend:** `cd d:\FinTrack\backend; .\venv\Scripts\activate; uvicorn app.main:app --reload --port 8000`
+- **Frontend:** `cd d:\FinTrack\frontend; npm run dev`
