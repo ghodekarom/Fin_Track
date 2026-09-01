@@ -36,7 +36,7 @@ def set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
         httponly=True,
         secure=is_prod,
         samesite="lax",
-        path="/api/auth",
+        path="/",
     )
 
 
@@ -48,7 +48,7 @@ def clear_refresh_cookie(response: Response) -> None:
         httponly=True,
         secure=is_prod,
         samesite="lax",
-        path="/api/auth",
+        path="/",
     )
 
 
