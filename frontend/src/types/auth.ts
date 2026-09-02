@@ -26,3 +26,14 @@ export interface MessageResponse {
   message: string;
   success: boolean;
 }
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  code: string;
+  full_name?: string;
+}
+
+export interface SendVerificationCodeRequest {
+  email: string;
+}

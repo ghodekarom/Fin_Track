@@ -26,12 +26,15 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+    EMAIL_VERIFICATION_CODE_EXPIRE_MINUTES: int = 10
 
     # Google OAuth 2.0 / OpenID Connect
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
-    # SMTP / Email Configuration (Password Reset & Verification)
+    # Email Service Configuration (Google SMTP locally, Resend in production)
+    RESEND_API_KEY: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
@@ -43,7 +46,8 @@ class Settings(BaseSettings):
     # Rate Limiting
     AUTH_RATE_LIMIT: str = "10/minute"
     LOGIN_RATE_LIMIT: str = "5/minute"
-    PASSWORD_RESET_RATE_LIMIT: str = "3/15minutes"
+    PASSWORD_RESET_RATE_LIMIT: str = "10/15minutes"
+    EMAIL_VERIFY_RATE_LIMIT: str = "5/10minutes"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

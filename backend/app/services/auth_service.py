@@ -1,12 +1,21 @@
+import logging
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Tuple
+
 from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
+from google.oauth2 import id_token
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.exceptions import ConflictException, NotFoundException, UnauthorizedException, ValidationException
+from app.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
 from app.core.security import (
     create_access_token,
     generate_random_token,
@@ -14,6 +23,7 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
+from app.models.email_verification import EmailVerificationCode
 from app.models.password_reset import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
@@ -24,23 +34,135 @@ from app.schemas.auth import (
     RegisterRequest,
     ResetPasswordRequest,
 )
-from app.services.email_service import send_password_reset_email
+from app.services.email_service import (
+    send_password_reset_email,
+    send_verification_code_email,
+)
+
+logger = logging.getLogger("fintrack.auth")
+
+
+async def send_registration_code(db: AsyncSession, email: str) -> None:
+    """Generate and dispatch a 6-digit verification code to the target email."""
+    email_clean = email.lower().strip()
+
+    # 1. Check if user already exists
+    existing = await db.execute(
+        select(User).where(func.lower(User.email) == email_clean)
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictException("An account with this email already exists.")
+
+    # 2. Invalidate previous unused codes for this email
+    await db.execute(
+        update(EmailVerificationCode)
+        .where(
+            func.lower(EmailVerificationCode.email) == email_clean,
+            EmailVerificationCode.used == False,
+        )
+        .values(used=True)
+    )
+
+    # 3. Generate 6-digit numeric OTP and SHA-256 hash
+    raw_code = f"{secrets.randbelow(1000000):06d}"
+    code_hash = hash_token(raw_code)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.EMAIL_VERIFICATION_CODE_EXPIRE_MINUTES
+    )
+
+    record = EmailVerificationCode(
+        email=email_clean,
+        code_hash=code_hash,
+        attempts=0,
+        used=False,
+        expires_at=expires_at,
+    )
+    db.add(record)
+    await db.commit()
+
+    # 4. Dispatch verification email
+    await send_verification_code_email(email_clean, raw_code)
+
+
+async def verify_and_consume_code(db: AsyncSession, email: str, raw_code: str) -> None:
+    """Verify that the provided 6-digit OTP matches an active, unexpired verification record."""
+    email_clean = email.lower().strip()
+    query = (
+        select(EmailVerificationCode)
+        .where(
+            func.lower(EmailVerificationCode.email) == email_clean,
+            EmailVerificationCode.used == False,
+        )
+        .order_by(EmailVerificationCode.created_at.desc())
+    )
+    result = await db.execute(query)
+    record = result.scalars().first()
+
+    if not record:
+        raise ValidationException(
+            "Invalid or expired verification code. Please request a new code.",
+            field="code",
+        )
+
+    # Check expiration
+    now = datetime.now(timezone.utc)
+    record_expires = (
+        record.expires_at.replace(tzinfo=timezone.utc)
+        if record.expires_at.tzinfo is None
+        else record.expires_at
+    )
+    if record_expires < now:
+        record.used = True
+        await db.commit()
+        raise ValidationException(
+            "Verification code has expired. Please request a new code.",
+            field="code",
+        )
+
+    # Check attempt threshold (max 5 attempts)
+    if record.attempts >= 5:
+        record.used = True
+        await db.commit()
+        raise ValidationException(
+            "Too many incorrect attempts. Please request a new verification code.",
+            field="code",
+        )
+
+    # Verify code hash
+    expected_hash = hash_token(raw_code.strip())
+    if record.code_hash != expected_hash:
+        record.attempts += 1
+        await db.commit()
+        raise ValidationException(
+            "Incorrect verification code. Please check the code and try again.",
+            field="code",
+        )
+
+    # Mark code as consumed
+    record.used = True
+    await db.commit()
 
 
 async def register_user(db: AsyncSession, schema: RegisterRequest) -> User:
-    """Register a new user with email and password."""
-    # Check for existing email (case-insensitive)
-    existing_query = select(User).where(func.lower(User.email) == schema.email.lower())
-    result = await db.execute(existing_query)
-    if result.scalar_one_or_none():
-        raise ConflictException("A user with this email address already exists.", field="email")
+    """Register a new user after successfully validating the 6-digit email OTP."""
+    email_clean = schema.email.lower().strip()
+
+    # Check if email is already taken
+    existing = await db.execute(
+        select(User).where(func.lower(User.email) == email_clean)
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictException("An account with this email already exists.")
+
+    # Validate and consume the 6-digit OTP code
+    await verify_and_consume_code(db, email_clean, schema.code)
 
     user = User(
-        email=schema.email.lower().strip(),
-        hashed_password=hash_password(schema.password),
+        email=email_clean,
         full_name=schema.full_name.strip() if schema.full_name else None,
-        is_verified=False,
+        hashed_password=hash_password(schema.password),
         is_active=True,
+        is_verified=True,
     )
     db.add(user)
     await db.commit()
@@ -49,92 +171,101 @@ async def register_user(db: AsyncSession, schema: RegisterRequest) -> User:
 
 
 async def authenticate_user(db: AsyncSession, schema: LoginRequest) -> User:
-    """Authenticate a user using email and password."""
-    query = select(User).where(func.lower(User.email) == schema.email.lower())
+    """Authenticate user credentials and return active user."""
+    query = select(User).where(func.lower(User.email) == schema.email.lower().strip())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
-    if not user or not user.hashed_password:
+    if not user:
         raise UnauthorizedException("Invalid email or password.")
+
+    if not user.hashed_password:
+        raise UnauthorizedException(
+            "This account was created via Google Sign-In. Please sign in with Google or use 'Forgot Password' to set a password."
+        )
 
     if not verify_password(schema.password, user.hashed_password):
         raise UnauthorizedException("Invalid email or password.")
 
     if not user.is_active:
-        raise UnauthorizedException("Account has been disabled.")
+        raise UnauthorizedException("User account is disabled.")
 
     return user
 
 
 async def authenticate_google_user(db: AsyncSession, schema: GoogleAuthRequest) -> User:
-    """Verify Google OIDC ID token and authenticate or register/link the user."""
+    """Verify Google OIDC ID token, find or register user, and handle seamless account linking."""
+    google_client_id = settings.GOOGLE_CLIENT_ID.strip() if settings.GOOGLE_CLIENT_ID else None
     try:
-        request = google_requests.Request()
-        # Verify token with Google public certs
-        id_info = google_id_token.verify_oauth2_token(
+        id_info = id_token.verify_oauth2_token(
             schema.id_token,
-            request,
-            settings.GOOGLE_CLIENT_ID if settings.GOOGLE_CLIENT_ID else None,
+            google_requests.Request(),
+            audience=google_client_id,
+            clock_skew_in_seconds=15,
         )
     except Exception as exc:
-        raise UnauthorizedException(f"Invalid Google authentication token: {exc}")
+        logger.warning(f"Google token verification failed: {exc}")
+        raise UnauthorizedException("Google authentication failed. Invalid or expired token.")
 
-    google_sub = id_info.get("sub")
+    google_id = id_info.get("sub")
     email = id_info.get("email")
-    name = id_info.get("name")
+    full_name = id_info.get("name")
     picture = id_info.get("picture")
 
-    if not email or not google_sub:
-        raise UnauthorizedException("Google authentication token did not contain valid email or user identity.")
+    if not email:
+        raise UnauthorizedException("Google token missing email claim.")
 
     email_lower = email.lower().strip()
 
-    # 1. Check if user with google_id exists
-    query = select(User).where(User.google_id == google_sub)
-    result = await db.execute(query)
-    user = result.scalar_one_or_none()
+    # 1. Search by Google ID first
+    query_google = select(User).where(User.google_id == google_id)
+    result_google = await db.execute(query_google)
+    user = result_google.scalar_one_or_none()
 
     if user:
         if not user.is_active:
-            raise UnauthorizedException("Account has been disabled.")
-        # Update avatar or name if updated on Google
-        if picture and user.avatar_url != picture:
+            raise UnauthorizedException("User account is disabled.")
+        if picture and not user.avatar_url:
             user.avatar_url = picture
             await db.commit()
+            await db.refresh(user)
         return user
 
-    # 2. Check if user with matching email already exists (Account Linking)
+    # 2. Search by email (Account Linking: User registered with email + password previously)
     query_email = select(User).where(func.lower(User.email) == email_lower)
     result_email = await db.execute(query_email)
-    user_by_email = result_email.scalar_one_or_none()
+    user = result_email.scalar_one_or_none()
 
-    if user_by_email:
-        if not user_by_email.is_active:
-            raise UnauthorizedException("Account has been disabled.")
-        user_by_email.google_id = google_sub
-        user_by_email.is_verified = True
-        if picture and not user_by_email.avatar_url:
-            user_by_email.avatar_url = picture
-        if name and not user_by_email.full_name:
-            user_by_email.full_name = name
+    if user:
+        if not user.is_active:
+            raise UnauthorizedException("User account is disabled.")
+        # Link Google ID to existing account and preserve existing password
+        user.google_id = google_id
+        user.is_verified = True
+        if picture and not user.avatar_url:
+            user.avatar_url = picture
+        if full_name and not user.full_name:
+            user.full_name = full_name
         await db.commit()
-        await db.refresh(user_by_email)
-        return user_by_email
+        await db.refresh(user)
+        logger.info(f"Successfully linked Google ID to existing account for {email_lower}")
+        return user
 
-    # 3. Create new user via Google Sign-In
-    new_user = User(
+    # 3. Create brand new user via Google
+    user = User(
         email=email_lower,
-        google_id=google_sub,
-        full_name=name,
+        full_name=full_name,
         avatar_url=picture,
-        hashed_password=None,
-        is_verified=True,
+        google_id=google_id,
         is_active=True,
+        is_verified=True,
+        hashed_password=None,
     )
-    db.add(new_user)
+    db.add(user)
     await db.commit()
-    await db.refresh(new_user)
-    return new_user
+    await db.refresh(user)
+    logger.info(f"Successfully registered new user via Google Sign-In: {email_lower}")
+    return user
 
 
 async def create_session_tokens(
@@ -142,19 +273,16 @@ async def create_session_tokens(
     user: User,
     user_agent: str | None = None,
     ip_address: str | None = None,
-) -> tuple[str, str, int]:
-    """
-    Create an access token and a refresh token.
-    Returns: (access_token, raw_refresh_token, expires_in_seconds)
-    """
-    # 1. Generate Access Token
+) -> Tuple[str, str, int]:
+    """Issue a new Access Token and cryptographically secure Refresh Token pair."""
+    # 1. Short-lived Access Token (JWT)
     access_token = create_access_token(
         subject=str(user.id),
         email=user.email,
     )
     expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-    # 2. Generate and store Refresh Token
+    # 2. Long-lived Refresh Token (Random Hex + DB SHA-256 hash)
     raw_refresh_token = generate_random_token(64)
     token_hashed = hash_token(raw_refresh_token)
     expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -178,11 +306,8 @@ async def rotate_refresh_token(
     raw_refresh_token: str,
     user_agent: str | None = None,
     ip_address: str | None = None,
-) -> tuple[str, str, int, User]:
-    """
-    Rotate a refresh token using Refresh Token Rotation (RTR).
-    If a revoked token is reused, all user refresh tokens are immediately revoked.
-    """
+) -> Tuple[str, str, int, User]:
+    """Implement Refresh Token Rotation (RTR) and Token Reuse Detection."""
     token_hashed = hash_token(raw_refresh_token)
 
     query = select(RefreshToken).where(RefreshToken.token_hash == token_hashed)
@@ -204,7 +329,12 @@ async def rotate_refresh_token(
 
     # Check expiration
     now = datetime.now(timezone.utc)
-    if refresh_record.expires_at < now:
+    record_expires = (
+        refresh_record.expires_at.replace(tzinfo=timezone.utc)
+        if refresh_record.expires_at.tzinfo is None
+        else refresh_record.expires_at
+    )
+    if record_expires < now:
         refresh_record.revoked = True
         await db.commit()
         raise UnauthorizedException("Refresh token has expired.")
@@ -259,7 +389,7 @@ async def revoke_all_user_tokens(db: AsyncSession, user_id: uuid.UUID) -> None:
 
 
 async def request_password_reset(db: AsyncSession, email: str) -> None:
-    """Generate a password reset token and dispatch email."""
+    """Generate an environment-driven password reset token and dispatch email."""
     query = select(User).where(func.lower(User.email) == email.lower().strip())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
@@ -268,9 +398,18 @@ async def request_password_reset(db: AsyncSession, email: str) -> None:
     if not user or not user.is_active:
         return
 
+    # Invalidate previous unused reset tokens for this user
+    await db.execute(
+        update(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used == False)
+        .values(used=True)
+    )
+
     raw_token = generate_random_token(32)
     token_hashed = hash_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
 
     reset_record = PasswordResetToken(
         token_hash=token_hashed,
@@ -294,10 +433,15 @@ async def reset_password(db: AsyncSession, schema: ResetPasswordRequest) -> None
     reset_record = result.scalar_one_or_none()
 
     if not reset_record or reset_record.used:
-        raise ValidationException("Invalid or expired password reset link.", field="token")
+        raise ValidationException("Invalid or already used password reset link. Please request a new one.", field="token")
 
     now = datetime.now(timezone.utc)
-    if reset_record.expires_at < now:
+    record_expires = (
+        reset_record.expires_at.replace(tzinfo=timezone.utc)
+        if reset_record.expires_at.tzinfo is None
+        else reset_record.expires_at
+    )
+    if record_expires < now:
         raise ValidationException("Password reset link has expired. Please request a new one.", field="token")
 
     user = await db.get(User, reset_record.user_id)

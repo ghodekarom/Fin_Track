@@ -2,9 +2,14 @@ from pydantic import BaseModel, EmailStr, Field
 from app.schemas.user import UserResponse
 
 
+class SendVerificationCodeRequest(BaseModel):
+    email: EmailStr
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100, description="Password min 8 characters")
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$", description="6-digit verification code sent to email")
     full_name: str | None = Field(None, max_length=100)
 
 

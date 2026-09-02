@@ -42,16 +42,28 @@
   - [Reset Password Page](file:///d:/FinTrack/frontend/src/app/reset-password/page.tsx): Token-validated password update form.
 - **AppShell ([AppShell.tsx](file:///d:/FinTrack/frontend/src/components/layout/AppShell.tsx)):** Route protection (redirects unauthenticated users to `/login`), clean auth layout, profile avatar, user email badge, and dropdown menu with "Log Out" and "Log Out All Devices".
 
-### E. Verification & Testing
-- **Backend Tests:** **23 / 23 pytest tests passed (100%)** including `test_auth.py` and `test_data_isolation.py` (cross-user data access barriers).
-- **Frontend Tests & Build:** `npm test` passed (1/1) and `npm run build` compiled cleanly with 0 TypeScript/ESLint errors across all 14 routes.
-- **Git:** All work committed and pushed to `origin/main` (commit `58a467b`).
+### F. Email Verification Code (OTP) Registration System
+- **Database Model & Migration:** Added [email_verification.py](file:///d:/FinTrack/backend/app/models/email_verification.py) (`EmailVerificationCode`) storing SHA-256 OTP hashes with 10-minute expiry and 5-attempt brute-force protection. Successfully applied migration `09dbad68cd7e_add_email_verification_codes.py`.
+- **Hybrid Email Dispatcher ([email_service.py](file:///d:/FinTrack/backend/app/services/email_service.py)):**
+  - **Local Development:** Standard/Google SMTP (`smtp.gmail.com:587`) via `_send_smtp_sync`.
+  - **Production:** Resend REST API via `httpx.AsyncClient` (`https://api.resend.com/emails`) when `RESEND_API_KEY` is provided.
+  - **Fallback:** Development console logging with `[DEV EMAIL]` tags.
+- **Backend Auth Endpoints & Service:**
+  - `POST /api/auth/send-verification-code`: Dispatches 6-digit OTP code, invalidates previous codes, enforces 5/10min rate limiting.
+  - `POST /api/auth/register`: Requires `code` matching SHA-256 hash in DB before creating active user account with `is_verified=True`.
+- **Frontend 2-Step Registration UI ([register/page.tsx](file:///d:/FinTrack/frontend/src/app/register/page.tsx)):**
+  - Progressive step flow: Step 1 (Credentials) -> Step 2 (6-digit OTP input with paste support, auto-focus, and 60-second resend countdown).
+  - Context & types updated in [AuthContext.tsx](file:///d:/FinTrack/frontend/src/context/AuthContext.tsx) and [auth.ts](file:///d:/FinTrack/frontend/src/types/auth.ts).
+
+### G. Verification & Testing
+- **Backend Tests:** **25 / 25 pytest tests passed (100%)** including full OTP send, validation, expiration, and invalid attempt test cases in [test_auth.py](file:///d:/FinTrack/backend/tests/test_auth.py).
+- **Frontend Tests & Build:** `npm run build` compiled cleanly with 0 TypeScript/ESLint errors across all 14 routes.
 
 ---
 
 ## 2. Current Project State
-- **Backend:** Production-ready FastAPI service with secure JWT auth, Google OIDC token verification, refresh token rotation, rate limiting, and strict user data isolation.
-- **Frontend:** Next.js 14 App Router application with full auth context, silent token refresh, sleek auth views, protected dashboard/expense/category routes, and profile session controls.
+- **Backend:** Production-ready FastAPI service with secure JWT auth, Google OIDC token verification, 6-digit email OTP verification (Google SMTP locally / Resend API in prod), refresh token rotation, rate limiting, and strict user data isolation.
+- **Frontend:** Next.js 14 App Router application with progressive 2-step OTP registration, auth context, silent token refresh, sleek auth views, protected dashboard/expense/category routes, and profile session controls.
 
 ---
 

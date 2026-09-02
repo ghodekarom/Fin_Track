@@ -15,6 +15,7 @@ from app.schemas.auth import (
     RefreshTokenResponse,
     RegisterRequest,
     ResetPasswordRequest,
+    SendVerificationCodeRequest,
     TokenResponse,
 )
 from app.schemas.user import UserResponse
@@ -49,6 +50,20 @@ def clear_refresh_cookie(response: Response) -> None:
         secure=is_prod,
         samesite="lax",
         path="/",
+    )
+
+
+@router.post("/send-verification-code", response_model=MessageResponse)
+@limiter.limit(settings.EMAIL_VERIFY_RATE_LIMIT)
+async def send_verification_code(
+    request: Request,
+    db: db_dep,
+    payload: SendVerificationCodeRequest,
+) -> MessageResponse:
+    """Send a 6-digit email verification code to the target email for registration."""
+    await auth_service.send_registration_code(db, payload.email)
+    return MessageResponse(
+        message=f"Verification code sent to {payload.email}. Please check your inbox."
     )
 
 

@@ -1,41 +1,143 @@
+from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_token
+from app.models.email_verification import EmailVerificationCode
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_register_user_success(client: AsyncClient):
-    """Test user registration creates user and sets refresh cookie."""
-    payload = {
-        "email": "newuser@example.com",
-        "password": "SecurePassword123!",
-        "full_name": "New User",
-    }
-    response = await client.post("/api/auth/register", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert "access_token" in data
-    assert data["user"]["email"] == "newuser@example.com"
-    assert data["user"]["full_name"] == "New User"
-    assert "fintrack_refresh_token" in response.cookies
+async def test_send_verification_code_success(client: AsyncClient, db_session: AsyncSession):
+    """Test dispatching a 6-digit OTP code to an email address."""
+    response = await client.post(
+        "/api/auth/send-verification-code",
+        json={"email": "newuser@example.com"},
+    )
+    assert response.status_code == 200
+    assert "Verification code sent" in response.json()["message"]
+
+    # Verify record was stored with SHA-256 hash
+    query = select(EmailVerificationCode).where(
+        EmailVerificationCode.email == "newuser@example.com"
+    )
+    result = await db_session.execute(query)
+    record = result.scalars().first()
+    assert record is not None
+    assert record.used is False
+    assert record.attempts == 0
+    assert len(record.code_hash) == 64  # SHA-256 hex length
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email_fails(client: AsyncClient, test_user: User):
-    """Test registering with an existing email returns 409 Conflict."""
-    payload = {
-        "email": test_user.email,
-        "password": "AnotherPassword123!",
-        "full_name": "Duplicate User",
-    }
-    response = await client.post("/api/auth/register", json=payload)
+async def test_send_verification_code_duplicate_email_fails(client: AsyncClient, test_user: User):
+    """Test requesting verification code for already registered email returns 409 Conflict."""
+    response = await client.post(
+        "/api/auth/send-verification-code",
+        json={"email": test_user.email},
+    )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_register_user_with_otp_flow(client: AsyncClient, db_session: AsyncSession):
+    """Test the full email verification + registration cycle."""
+    email = "signup@example.com"
+
+    # 1. Send verification code
+    send_res = await client.post(
+        "/api/auth/send-verification-code",
+        json={"email": email},
+    )
+    assert send_res.status_code == 200
+
+    # Retrieve record from DB and set a known code
+    query = select(EmailVerificationCode).where(
+        EmailVerificationCode.email == email,
+        EmailVerificationCode.used == False,
+    )
+    result = await db_session.execute(query)
+    record = result.scalars().first()
+    assert record is not None
+
+    test_otp = "849201"
+    record.code_hash = hash_token(test_otp)
+    await db_session.commit()
+
+    # 2. Try registering with wrong code -> fails
+    bad_res = await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "code": "000000",
+            "full_name": "Verified User",
+        },
+    )
+    assert bad_res.status_code in (400, 422)
+
+    # 3. Register with correct OTP code -> 201 Created
+    good_res = await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "code": test_otp,
+            "full_name": "Verified User",
+        },
+    )
+    assert good_res.status_code == 201
+    data = good_res.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == email
+    assert data["user"]["full_name"] == "Verified User"
+    assert data["user"]["is_verified"] is True
+    assert "fintrack_refresh_token" in good_res.cookies
+
+    # 4. Reusing consumed code fails
+    replay_res = await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "code": test_otp,
+            "full_name": "Verified User",
+        },
+    )
+    assert replay_res.status_code in (400, 409, 422)
+
+
+@pytest.mark.asyncio
+async def test_register_expired_code_fails(client: AsyncClient, db_session: AsyncSession):
+    """Test registering with an expired OTP code fails."""
+    email = "expired@example.com"
+    test_otp = "654321"
+
+    # Create expired record
+    expired_record = EmailVerificationCode(
+        email=email,
+        code_hash=hash_token(test_otp),
+        attempts=0,
+        used=False,
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
+    db_session.add(expired_record)
+    await db_session.commit()
+
+    res = await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "code": test_otp,
+            "full_name": "Expired Code User",
+        },
+    )
+    assert res.status_code in (400, 422)
 
 
 @pytest.mark.asyncio

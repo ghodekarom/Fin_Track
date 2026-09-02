@@ -15,7 +15,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  sendVerificationCode: (email: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    code: string,
+    fullName?: string
+  ) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
@@ -79,14 +85,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(response.data.user);
   };
 
+  const sendVerificationCode = async (email: string) => {
+    await apiClient.post("/auth/send-verification-code", {
+      email,
+    });
+  };
+
   const register = async (
     email: string,
     password: string,
+    code: string,
     fullName?: string
   ) => {
     const response = await apiClient.post<AuthResponse>("/auth/register", {
       email,
       password,
+      code,
       full_name: fullName,
     });
     setAccessToken(response.data.access_token);
@@ -130,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticated: !!user,
         isLoading,
         login,
+        sendVerificationCode,
         register,
         loginWithGoogle,
         logout,

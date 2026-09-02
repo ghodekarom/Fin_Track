@@ -26,7 +26,11 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/");
     } catch (err: any) {
-      setError(err?.message || "Failed to log in. Please check your credentials.");
+      if (err?.message === "Network Error" || !err?.status) {
+        setError("Unable to connect to the backend server. Please verify that the backend is running on http://localhost:8000.");
+      } else {
+        setError(err?.message || "Failed to log in. Please check your credentials.");
+      }
     } finally {
       setIsLoading(false);
     }
