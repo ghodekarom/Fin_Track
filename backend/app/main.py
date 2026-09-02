@@ -20,7 +20,16 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Auto-seed default categories
+    # 1. Automatically create all missing tables (e.g. email_verification_codes) on startup
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("uvicorn.error").warning(f"Table auto-creation notice: {exc}")
+
+    # 2. Auto-seed default categories
     try:
         await seed_categories()
     except Exception as exc:

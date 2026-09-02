@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 import httpx
 
 from app.config import settings
+from app.core.exceptions import ValidationException
 
 logger = logging.getLogger("fintrack.email")
 
@@ -49,14 +50,14 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
     """
     # 1. Resend API (Production)
     if settings.RESEND_API_KEY:
+        from_email = settings.EMAILS_FROM_EMAIL.strip() if settings.EMAILS_FROM_EMAIL else ""
+        if not from_email or from_email == "noreply@fintrack.app":
+            from_email = "onboarding@resend.dev"
+
+        sender_name = settings.EMAILS_FROM_NAME.strip() if settings.EMAILS_FROM_NAME else "FinTrack"
+        sender_string = f"{sender_name} <{from_email}>"
+
         try:
-            from_email = settings.EMAILS_FROM_EMAIL.strip() if settings.EMAILS_FROM_EMAIL else ""
-            if not from_email or from_email == "noreply@fintrack.app":
-                from_email = "onboarding@resend.dev"
-
-            sender_name = settings.EMAILS_FROM_NAME.strip() if settings.EMAILS_FROM_NAME else "FinTrack"
-            sender_string = f"{sender_name} <{from_email}>"
-
             async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.post(
                     "https://api.resend.com/emails",
@@ -77,11 +78,21 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
                     print(f"[RESEND] Email successfully dispatched to {to_email}")
                     return
                 else:
-                    logger.error(f"[RESEND ERROR] Status {response.status_code}: {response.text}")
-                    print(f"[RESEND ERROR] Status {response.status_code}: {response.text}")
+                    err_json = {}
+                    try:
+                        err_json = response.json()
+                    except Exception:
+                        pass
+                    err_msg = err_json.get("message") or response.text or "Failed to send email via Resend"
+                    logger.error(f"[RESEND ERROR] Status {response.status_code}: {err_msg}")
+                    print(f"[RESEND ERROR] Status {response.status_code}: {err_msg}")
+                    raise ValidationException(f"Email delivery error: {err_msg}", field="email")
+        except ValidationException:
+            raise
         except Exception as exc:
             logger.error(f"[RESEND EXCEPTION] Failed to dispatch email to {to_email}: {exc}")
             print(f"[RESEND EXCEPTION] Failed to dispatch email to {to_email}: {exc}")
+            raise ValidationException(f"Failed to send email: {exc}", field="email")
 
     # 2. Google / Standard SMTP (Local / Staging)
     if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD:
