@@ -212,6 +212,17 @@ The user can set personal spending goals (overall or category-specific):
 |----|-------------|----------|------------|
 | FR-30 | Live Data & Absolute Isolation — All data is securely bound to the authenticated user with zero cross-user access or mock financial data | P0 | As a user, I want full assurance that my financial data is real, private, and inaccessible to any other user. |
 
+### 7.10 AI Recommendation: Monthly Financial Health Score & Executive Summary
+
+The application provides an automated, AI-powered financial advisor experience tailored strictly to the user's spending habits:
+
+| ID | Requirement | Priority | User Story |
+|----|-------------|----------|------------|
+| FR-31 | **Financial Health Score (0–100):** Real-time algorithmically computed rating based on budget adherence, spending velocity, category diversification, and expense control. | P1 | As a user, I want a clear numerical score and status badge (e.g., "Excellent - 88/100") on my dashboard so I immediately know how healthy my financial habits are this month. |
+| FR-32 | **Monthly AI Executive Summary:** LLM-generated monthly report card summarizing top spending areas, biggest expenses, and month-over-month trends. | P1 | As a user, I want an easy-to-read summary of my month's finances so I can understand my spending without manually crunching numbers. |
+| FR-33 | **Personalized AI Savings Recommendations:** 2–3 actionable, concrete financial tips for the upcoming month to cut costs and improve budget adherence. | P1 | As a user, I want specific recommendations (e.g., "Cap dining out to save ₹3,000 next month") so I know exactly what actions to take. |
+| FR-34 | **Exportable / Shareable Monthly Digest:** 1-click clean export/view of the monthly financial performance summary card. | P2 | As a user, I want to download or view a clean summary card of my monthly progress so I can reflect on my financial milestones. |
+
 ---
 
 ## 8. Key User Flows

@@ -36,6 +36,7 @@ This release introduces **secure, production-ready JWT authentication, Google OA
 | Password Hashing | **pwdlib / passlib (Argon2 / BCrypt)** | Secure salted password hashing; never store plaintext passwords |
 | JWT Engine | **python-jose / PyJWT** | Creation and cryptographic validation of short-lived JWT access tokens |
 | OAuth & Social Auth | **authlib / httpx / google-auth** | Backend verification of Google OAuth 2.0 / OIDC ID tokens |
+| AI Recommendations & LLM | **google-generativeai (Gemini 1.5 Flash)** | Powers automated Monthly Financial Health Summary and cost-saving advice |
 | Rate Limiting | **slowapi (Limiter)** | Protects `/api/auth/login`, `/api/auth/register`, and `/api/auth/forgot-password` against brute-force attacks |
 | Email Dispatch | **fastapi-mail / SMTP client** | Dispatches password-reset tokens and verification emails |
 | Frontend Auth & Session | **React Context + TanStack Query** | Centralized auth state, automatic access token renewal, user profile synchronization |
@@ -316,9 +317,91 @@ All endpoints require `Authorization: Bearer <token>` except public authenticati
 | GET | `/api/budgets/status` | Yes (Bearer) | Live computed spending vs limits for `current_user.id` |
 | GET | `/api/dashboard/*` | Yes (Bearer) | Summary, charts, trends, and MoM analytics for `current_user.id` |
 
+### 6.3 AI Recommendation & Financial Health Endpoints (`/api/ai`)
+
+| Method | Endpoint | Auth Required | Description | Request Body / Params | Response Codes |
+|---|---|---|---|---|---|
+| GET | `/api/ai/health-score` | Yes (Bearer) | Retrieve real-time Financial Health Score (0–100) with metric breakdowns | `?month=X&year=Y` (defaults to current) | `200 OK` (returns `HealthScoreResponse`) |
+| GET | `/api/ai/monthly-summary` | Yes (Bearer) | Retrieve cached or generated monthly AI executive digest and actionable tips | `?month=X&year=Y` (defaults to current) | `200 OK` (returns `MonthlySummaryResponse`) |
+| POST | `/api/ai/monthly-summary/generate` | Yes (Bearer) | Force regenerate AI analysis and advice via Google Gemini | `?month=X&year=Y` | `200 OK`, `429 Too Many Requests` |
+
 ---
 
-## 7. Folder Structure
+## 7. AI Recommendation & Financial Health Scoring Architecture
+
+### 7.1 Algorithmic Financial Health Scoring Model (0–100)
+
+The Financial Health Score is computed deterministically via a weighted multi-factor algorithm:
+
+$$\text{Health Score} = (0.40 \times \text{Budget Adherence}) + (0.30 \times \text{Savings/Spend Velocity}) + (0.20 \times \text{Category Diversity}) + (0.10 \times \text{Expense Regularity})$$
+
+| Component | Weight | Calculation Method | Scoring Scale |
+|---|---|---|---|
+| **Budget Adherence** | 40% | Measures whether expenses stay below set category/overall limits. Deducts points proportionally for overspent budgets. | 0–100 (100 = All budgets <= 80% utilized) |
+| **Spending Velocity** | 30% | Compares daily spending rate against month progress. Detects if user is on track to exhaust budget before month-end. | 0–100 (100 = Controlled uniform daily pace) |
+| **Category Diversification** | 20% | Evaluates whether spending is dangerously concentrated in a single discretionary bucket (e.g. >60% in Shopping/Entertainment). | 0–100 (100 = Balanced allocation across life categories) |
+| **Expense Regularity** | 10% | Assesses consistent logging habits and absence of chaotic impulse spikes (>3x average transaction). | 0–100 (100 = Smooth transaction distribution) |
+
+#### Score Tier Classifications:
+- **85 – 100:** 🟢 **Excellent** (Strong savings habits, optimal budget adherence)
+- **70 – 84:** 🔵 **Good** (Healthy management, minor category overages)
+- **50 – 69:** 🟡 **Fair** (Budget pressure, high discretionary concentration)
+- **0 – 49:** 🔴 **Needs Attention** (Exceeded multiple budgets, high spending velocity)
+
+---
+
+### 7.2 Google Gemini LLM Integration & Structured Schema
+
+FinTrack uses Google's `gemini-1.5-flash` model via the Google GenAI SDK to generate personalized monthly executive summaries and actionable advice:
+
+1. **Strict Data Anonymization:** Only aggregated numerical metrics (totals, category percentages, budget overage amounts, and top merchant descriptions) are passed into the prompt. **Zero PII (email, password, user names, or tokens) is ever transmitted to the LLM.**
+2. **Strict User Scoping:** The data payload fed into the prompt is generated strictly from `current_user.id` records.
+3. **Structured JSON Output:** Gemini is invoked with schema enforcement (`response_mime_type="application/json"`), ensuring guaranteed parsing into Pydantic models without brittle regex.
+
+#### Expected LLM Output Schema:
+```json
+{
+  "score": 82,
+  "status": "Good",
+  "executive_summary": "In September, your total expenditure was ₹24,500 across 32 transactions...",
+  "top_category": {
+    "name": "Food & Dining",
+    "amount": 9200,
+    "percentage": 37.5
+  },
+  "key_win": "Your transportation spending dropped by 22% compared to last month.",
+  "biggest_expense": {
+    "description": "Electronics Store",
+    "amount": 5400,
+    "date": "2026-09-12"
+  },
+  "actionable_recommendations": [
+    "Cap weekend dining out to reduce Food expenses by ~₹2,500 next month.",
+    "Set a ₹4,000 budget limit on Entertainment to keep your velocity on track.",
+    "Review your 2 recurring streaming subscriptions before renewal on the 15th."
+  ]
+}
+```
+
+---
+
+### 7.3 Database Caching & Performance Optimization
+
+To prevent unnecessary API latency and avoid redundant LLM cost:
+- A new table `financial_health_summaries` is introduced:
+  - `id`: UUID Primary Key
+  - `user_id`: UUID Foreign Key to `users.id` (Indexed, Cascade Delete)
+  - `month`: Integer (1–12)
+  - `year`: Integer
+  - `score`: Integer (0–100)
+  - `status`: String (e.g. "Excellent", "Good", "Fair", "Needs Attention")
+  - `summary_json`: JSONB (storing executive summary, top category, key win, recommendations)
+  - `created_at` & `updated_at`: Timestamps
+- **Cache Invalidation Policy:** Results are cached per `(user_id, month, year)`. When a user logs or deletes expenses in the current month, the score recalculates dynamically in-memory; the full LLM executive summary can be re-analyzed on-demand with a 15-minute rate limit.
+
+---
+
+## 8. Folder Structure
 
 ```
 fintrack/

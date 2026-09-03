@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: str = "5/minute"
     PASSWORD_RESET_RATE_LIMIT: str = "10/15minutes"
     EMAIL_VERIFY_RATE_LIMIT: str = "5/10minutes"
+    AI_RATE_LIMIT: str = "5/10minutes"
+
+    # AI Recommendation Engine (Google Gemini / Extensible)
+    GEMINI_API_KEY: str = ""
+    AI_PROVIDER: str = "gemini"  # Supported: "gemini" (future: "openai", "claude")
+    AI_MODEL_NAME: str = "gemini-1.5-flash"
+    AI_INSIGHTS_CACHE_MINUTES: int = 360
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
