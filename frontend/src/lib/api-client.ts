@@ -130,11 +130,19 @@ apiClient.interceptors.response.use(
 
     // Format normalized error shapes
     const errData = error.response?.data as Record<string, any> | undefined;
-    const message =
+    let message =
       errData?.error?.message ||
       errData?.detail ||
       error.message ||
       "An unexpected error occurred.";
+
+    if (
+      errData?.error?.field &&
+      typeof message === "string" &&
+      !message.toLowerCase().includes(errData.error.field.toLowerCase())
+    ) {
+      message = `${errData.error.field.replace('_', ' ')}: ${message}`;
+    }
 
     const normalizedError = {
       message: typeof message === "string" ? message : JSON.stringify(message),

@@ -91,8 +91,8 @@ export default function RegisterPage() {
       setSuccessMessage(`We sent a 6-digit verification code to ${email.trim()}`);
     } catch (err: any) {
       setError(
-        err?.response?.data?.message ||
         err?.message ||
+        err?.response?.data?.error?.message ||
         "Failed to send verification code. Please try again."
       );
     } finally {
@@ -199,8 +199,8 @@ export default function RegisterPage() {
       }, 1500);
     } catch (err: any) {
       setError(
-        err?.response?.data?.message ||
         err?.message ||
+        err?.response?.data?.error?.message ||
         "Verification failed. Please check the code and try again."
       );
       setIsLoading(false);

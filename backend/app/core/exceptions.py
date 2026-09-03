@@ -94,9 +94,16 @@ def setup_exception_handlers(app: FastAPI) -> None:
             field = str(loc[-1]) if len(loc) > 1 else (str(loc[0]) if loc else None)
             if field == "body":
                 field = None
-            message = err.get("msg", "Validation error")
-            if message.startswith("Value error, "):
-                message = message[13:]
+            msg = err.get("msg", "Validation error")
+            if msg.startswith("Value error, "):
+                msg = msg[13:]
+
+            if field and msg.lower() == "field required":
+                message = f"Missing required field: '{field}'"
+            elif field:
+                message = f"{field.replace('_', ' ').capitalize()}: {msg}"
+            else:
+                message = msg
         else:
             field = None
             message = "Validation error"
