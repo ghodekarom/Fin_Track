@@ -1,6 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 function getBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1" && !host.includes("vercel.app")) {
+      return `http://${host}:8000/api`;
+    }
+  }
   let url = (
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"
   ).trim();
@@ -48,9 +54,10 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor: Inject Bearer token
+// Request interceptor: Inject Bearer token & ensure dynamic baseURL
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    config.baseURL = getBaseUrl();
     if (inMemoryAccessToken && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${inMemoryAccessToken}`;
     }
