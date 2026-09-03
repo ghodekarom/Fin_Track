@@ -92,3 +92,47 @@ export interface AskAiQueryResponse {
   suggested_followups: string[];
   provider: string;
 }
+
+// Phase 4: Natural Language Quick-Add Types
+export interface ParsedExpenseDraft {
+  title: string;
+  amount: number;
+  category_id?: string | null;
+  category_name: string;
+  expense_date: string;
+  payment_mode: "cash" | "card" | "upi" | "other";
+  notes?: string | null;
+  confidence_score: number;
+  provider: string;
+}
+
+export interface QuickAddConfirmRequest {
+  title: string;
+  amount: number;
+  category_id: string;
+  expense_date: string;
+  payment_mode: "cash" | "card" | "upi" | "other";
+  notes?: string | null;
+}
+
+// Phase 5: Financial Health Score & Executive Summary Types
+export interface ScorePillarBreakdown {
+  budget_adherence: number;
+  savings_velocity: number;
+  category_discipline: number;
+}
+
+export interface FinancialHealthScoreResponse {
+  health_score: number;
+  letter_grade: string;
+  status_label: string;
+  pillars: ScorePillarBreakdown;
+  executive_summary: string;
+  key_achievements: string[];
+  improvement_goals: string[];
+  top_spend_category: string;
+  potential_monthly_savings: number;
+  period_month: string;
+  generated_at: string;
+  provider: string;
+}

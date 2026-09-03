@@ -21,6 +21,8 @@ import { BudgetForm } from "@/components/budgets/BudgetForm";
 import SmartInsightsCard from "@/components/dashboard/SmartInsightsCard";
 import PredictiveBudgetCard from "@/components/dashboard/PredictiveBudgetCard";
 import AskAiAssistantModal from "@/components/dashboard/AskAiAssistantModal";
+import QuickAddExpenseBar from "@/components/dashboard/QuickAddExpenseBar";
+import FinancialHealthScoreCard from "@/components/dashboard/FinancialHealthScoreCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -98,6 +100,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Row 0.5: Natural Language Quick-Add Expense Bar */}
+      <QuickAddExpenseBar onExpenseAdded={handleRetry} />
+
       {/* Row 1: Summary Cards */}
       <SummaryCards
         momComparison={mom}
@@ -109,6 +114,9 @@ export default function Dashboard() {
 
       {/* Row 1.6: Predictive Overspend & Dynamic Budgeting */}
       <PredictiveBudgetCard onBudgetApplied={refetchBudgets} />
+
+      {/* Row 1.7: Monthly Financial Health Score & Executive Summary */}
+      <FinancialHealthScoreCard />
 
       {/* Row 2: Charts Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

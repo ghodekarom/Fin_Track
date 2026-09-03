@@ -5,16 +5,26 @@ from fastapi import APIRouter, Depends, Request
 from app.api.deps import current_user_dep, db_dep
 from app.config import settings
 from app.core.limiter import limiter
-from app.models.user import User
 from app.schemas.ai import (
     ApplySuggestedBudgetRequest,
     AskAiQueryRequest,
     AskAiQueryResponse,
+    FinancialHealthScoreResponse,
+    ParsedExpenseDraft,
     PredictiveBudgetResponse,
+    QuickAddConfirmRequest,
+    QuickAddParseRequest,
     SpendingInsightsResponse,
 )
 from app.schemas.auth import MessageResponse
-from app.services import ai_assistant_service, ai_budget_service, ai_insight_service
+from app.schemas.expense import ExpenseResponse
+from app.services import (
+    ai_assistant_service,
+    ai_budget_service,
+    ai_health_service,
+    ai_insight_service,
+    ai_quickadd_service,
+)
 
 router = APIRouter(tags=["ai"])
 
@@ -99,4 +109,54 @@ async def ask_financial_assistant(
         db,
         user=current_user,
         payload=payload,
+    )
+
+
+@router.post("/quick-add/parse", response_model=ParsedExpenseDraft)
+@limiter.limit(settings.AI_RATE_LIMIT)
+async def parse_quick_add(
+    request: Request,
+    payload: QuickAddParseRequest,
+    db: db_dep,
+    current_user: current_user_dep,
+) -> ParsedExpenseDraft:
+    """
+    Parse a free-form natural language expense string into a structured draft
+    with auto-categorization and date/amount parsing.
+    """
+    return await ai_quickadd_service.parse_natural_language_expense(
+        db,
+        user=current_user,
+        text=payload.text,
+    )
+
+
+@router.post("/quick-add/confirm", response_model=ExpenseResponse)
+async def confirm_quick_add(
+    payload: QuickAddConfirmRequest,
+    db: db_dep,
+    current_user: current_user_dep,
+) -> ExpenseResponse:
+    """
+    Save the confirmed parsed expense directly to the database.
+    """
+    return await ai_quickadd_service.confirm_and_save_expense(
+        db,
+        user=current_user,
+        payload=payload,
+    )
+
+
+@router.get("/health-score", response_model=FinancialHealthScoreResponse)
+async def get_financial_health_score(
+    db: db_dep,
+    current_user: current_user_dep,
+) -> FinancialHealthScoreResponse:
+    """
+    Calculate 0-100 monthly financial health score and executive digest
+    across budget adherence, savings velocity, and category discipline.
+    """
+    return await ai_health_service.calculate_monthly_financial_health(
+        db,
+        user=current_user,
     )

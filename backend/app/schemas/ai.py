@@ -114,3 +114,58 @@ class AskAiQueryResponse(BaseModel):
     suggested_followups: List[str] = Field(default_factory=list, description="Contextual quick prompt chips")
     provider: str = Field("gemini-flash-latest", description="LLM provider or rule fallback")
 
+
+# =========================================================================
+# Phase 4: Natural Language Quick-Add & Smart Auto-Categorization
+# =========================================================================
+
+class QuickAddParseRequest(BaseModel):
+    text: str = Field(..., min_length=3, max_length=300, description="Natural language expense string")
+
+
+class ParsedExpenseDraft(BaseModel):
+    title: str = Field(..., description="Clean extracted merchant/item title")
+    amount: float = Field(..., gt=0, description="Extracted numerical expense amount")
+    category_id: Optional[str] = Field(None, description="Mapped category UUID if found")
+    category_name: str = Field("Other", description="Mapped category name")
+    expense_date: str = Field(..., description="ISO formatted YYYY-MM-DD date")
+    payment_mode: Literal["cash", "card", "upi", "other"] = Field("other", description="Extracted payment method")
+    notes: Optional[str] = Field(None, description="Extra notes or merchant details")
+    confidence_score: float = Field(0.9, description="Extraction confidence score from 0 to 1")
+    provider: str = Field("gemini-flash-latest", description="Parser engine used")
+
+
+class QuickAddConfirmRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
+    amount: float = Field(..., gt=0)
+    category_id: str = Field(..., description="Category UUID")
+    expense_date: str = Field(..., description="ISO formatted YYYY-MM-DD")
+    payment_mode: Literal["cash", "card", "upi", "other"] = "other"
+    notes: Optional[str] = None
+
+
+# =========================================================================
+# Phase 5: Monthly Financial Health Score & Executive Summary (Digest)
+# =========================================================================
+
+class ScorePillarBreakdown(BaseModel):
+    budget_adherence: float = Field(..., ge=0, le=40, description="Score based on staying within budget (0-40)")
+    savings_velocity: float = Field(..., ge=0, le=35, description="Score based on savings to spend ratio (0-35)")
+    category_discipline: float = Field(..., ge=0, le=25, description="Score based on category diversification (0-25)")
+
+
+class FinancialHealthScoreResponse(BaseModel):
+    health_score: int = Field(..., ge=0, le=100, description="Overall health score (0-100)")
+    letter_grade: str = Field(..., description="A+, A, B, C, or D")
+    status_label: str = Field(..., description="Excellent, Healthy, Needs Attention, etc.")
+    pillars: ScorePillarBreakdown
+    executive_summary: str = Field(..., description="Personalized executive digest paragraph")
+    key_achievements: List[str] = Field(default_factory=list, description="Top positive financial milestones")
+    improvement_goals: List[str] = Field(default_factory=list, description="Top strategic goals for next month")
+    top_spend_category: str = Field(..., description="Highest spending bucket")
+    potential_monthly_savings: float = Field(0.0, description="Estimated achievable savings")
+    period_month: str = Field(..., description="Month label, e.g. September 2026")
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    provider: str = Field("FinTrack Health Engine", description="Algorithm or LLM provider")
+
+
