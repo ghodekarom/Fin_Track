@@ -86,3 +86,31 @@ class PredictiveBudgetResponse(BaseModel):
     smart_allocations: List[DynamicBudgetRecommendation] = Field(default_factory=list)
     currency: str = "INR"
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# =========================================================================
+# Phase 3: "Ask FinTrack AI" — Conversational Financial Assistant
+# =========================================================================
+
+class ChatMessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class ChatMessage(BaseModel):
+    role: ChatMessageRole
+    content: str
+    timestamp: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+
+class AskAiQueryRequest(BaseModel):
+    question: str = Field(..., min_length=2, max_length=500, description="Natural language question about user's finances")
+    history: List[ChatMessage] = Field(default_factory=list, description="Recent conversation history for conversational context")
+
+
+class AskAiQueryResponse(BaseModel):
+    answer: str = Field(..., description="Markdown-formatted conversational response strictly grounded in user's data")
+    related_metrics: Optional[dict] = Field(None, description="Key numerical highlights relevant to the question")
+    suggested_followups: List[str] = Field(default_factory=list, description="Contextual quick prompt chips")
+    provider: str = Field("gemini-flash-latest", description="LLM provider or rule fallback")
+

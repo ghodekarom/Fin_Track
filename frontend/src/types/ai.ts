@@ -68,3 +68,27 @@ export interface PredictiveBudgetResponse {
   currency: string;
   generated_at: string;
 }
+
+// Phase 3: "Ask FinTrack AI" — Conversational Financial Assistant
+export type ChatMessageRole = "user" | "assistant";
+
+export interface ChatMessage {
+  id?: string;
+  role: ChatMessageRole;
+  content: string;
+  timestamp?: string;
+  suggested_followups?: string[];
+  provider?: string;
+}
+
+export interface AskAiQueryRequest {
+  question: string;
+  history?: { role: ChatMessageRole; content: string }[];
+}
+
+export interface AskAiQueryResponse {
+  answer: string;
+  related_metrics?: Record<string, any> | null;
+  suggested_followups: string[];
+  provider: string;
+}

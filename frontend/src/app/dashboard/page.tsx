@@ -20,15 +20,17 @@ import { BudgetStatusCard } from "@/components/dashboard/BudgetStatusCard";
 import { BudgetForm } from "@/components/budgets/BudgetForm";
 import SmartInsightsCard from "@/components/dashboard/SmartInsightsCard";
 import PredictiveBudgetCard from "@/components/dashboard/PredictiveBudgetCard";
+import AskAiAssistantModal from "@/components/dashboard/AskAiAssistantModal";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { formatCurrency } from "@/lib/utils/currency";
 import { format } from "date-fns";
-import { Plus, Eye, Receipt, Calendar, Info, X } from "lucide-react";
+import { Plus, Eye, Receipt, Calendar, Info, X, Sparkles } from "lucide-react";
 
 export default function Dashboard() {
   const [trendInterval, setTrendInterval] = useState<"daily" | "weekly" | "monthly">("daily");
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
 
   // Queries
   const { data: summary, isLoading: sumLoading, isError: sumError, refetch: refetchSum } = useDashboardSummary();
@@ -71,7 +73,14 @@ export default function Dashboard() {
             Here is a snapshot of your spending patterns and budget status.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setIsAskAiOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-cyan-300 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 rounded-xl transition duration-150 active:scale-95 shrink-0 shadow-sm shadow-cyan-500/10 cursor-pointer"
+          >
+            <Sparkles className="h-4 w-4 text-cyan-400" />
+            Ask AI
+          </button>
           <button
             onClick={() => setIsBudgetModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition duration-150 active:scale-95 shrink-0"
@@ -200,6 +209,22 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Floating Action Button (FAB) for Ask FinTrack AI */}
+      <button
+        onClick={() => setIsAskAiOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 cursor-pointer group"
+        title="Open FinTrack AI Assistant"
+      >
+        <Sparkles className="w-4 h-4 text-cyan-200 animate-pulse group-hover:rotate-12 transition-transform" />
+        <span>Ask FinTrack AI</span>
+      </button>
+
+      {/* Ask FinTrack AI Assistant Modal */}
+      <AskAiAssistantModal
+        isOpen={isAskAiOpen}
+        onClose={() => setIsAskAiOpen(false)}
+      />
     </div>
   );
 }

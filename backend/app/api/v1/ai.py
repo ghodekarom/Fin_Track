@@ -8,11 +8,13 @@ from app.core.limiter import limiter
 from app.models.user import User
 from app.schemas.ai import (
     ApplySuggestedBudgetRequest,
+    AskAiQueryRequest,
+    AskAiQueryResponse,
     PredictiveBudgetResponse,
     SpendingInsightsResponse,
 )
 from app.schemas.auth import MessageResponse
-from app.services import ai_budget_service, ai_insight_service
+from app.services import ai_assistant_service, ai_budget_service, ai_insight_service
 
 router = APIRouter(tags=["ai"])
 
@@ -77,4 +79,24 @@ async def apply_recommended_budget(
     return MessageResponse(
         message=f"Successfully set budget limit to ₹{budget.limit_amount:,.0f} for this category.",
         success=True,
+    )
+
+
+@router.post("/ask", response_model=AskAiQueryResponse)
+@limiter.limit(settings.AI_RATE_LIMIT)
+async def ask_financial_assistant(
+    request: Request,
+    payload: AskAiQueryRequest,
+    db: db_dep,
+    current_user: current_user_dep,
+) -> AskAiQueryResponse:
+    """
+    Interactive conversational financial assistant. Answer user queries about
+    their spending, budgets, savings, affordability, and trends strictly based
+    on their isolated personal financial records.
+    """
+    return await ai_assistant_service.answer_user_financial_query(
+        db,
+        user=current_user,
+        payload=payload,
     )
