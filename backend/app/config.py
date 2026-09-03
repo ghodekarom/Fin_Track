@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # AI Recommendation Engine (Google Gemini / Extensible)
     GEMINI_API_KEY: str = ""
     AI_PROVIDER: str = "gemini"  # Supported: "gemini" (future: "openai", "claude")
-    AI_MODEL_NAME: str = "gemini-1.5-flash"
+    AI_MODEL_NAME: str = "gemini-flash-latest"
     AI_INSIGHTS_CACHE_MINUTES: int = 360
 
     @field_validator("DATABASE_URL", mode="before")
