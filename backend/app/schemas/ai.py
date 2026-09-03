@@ -26,5 +26,63 @@ class SpendingInsightsResponse(BaseModel):
     total_potential_monthly_savings: float = Field(0.0, description="Sum of all identified potential savings")
     currency: str = Field("INR", description="Default currency code")
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    provider: str = Field("gemini-1.5-flash", description="AI provider used or fallback engine")
+    provider: str = Field("gemini-flash-latest", description="AI provider used or fallback engine")
     is_cached: bool = Field(False, description="True if served from memory cache")
+
+
+# =========================================================================
+# Phase 2: Predictive Overspend Warning & Dynamic Budget Allocator
+# =========================================================================
+
+class VelocityRiskLevel(str, Enum):
+    SAFE = "safe"
+    MODERATE = "moderate"
+    CRITICAL = "critical"
+
+
+class CategoryVelocityForecast(BaseModel):
+    category_id: str
+    category_name: str
+    budget_limit: float
+    current_spent: float
+    daily_burn_rate: float
+    projected_month_end_spend: float
+    projected_overage: float
+    exhaustion_day: Optional[int] = None
+    risk_level: VelocityRiskLevel
+    safe_daily_spend: float
+
+
+class OverallVelocityForecast(BaseModel):
+    overall_budget_limit: Optional[float] = None
+    current_spent: float
+    daily_burn_rate: float
+    projected_month_end_spend: float
+    projected_overage: float
+    days_elapsed: int
+    days_remaining: int
+    safe_daily_spend: float
+    risk_level: VelocityRiskLevel
+    risk_message: str
+    category_forecasts: List[CategoryVelocityForecast] = Field(default_factory=list)
+
+
+class DynamicBudgetRecommendation(BaseModel):
+    category_id: str
+    category_name: str
+    current_budget: Optional[float] = None
+    suggested_budget: float
+    average_monthly_spend: float
+    reasoning: str
+
+
+class ApplySuggestedBudgetRequest(BaseModel):
+    category_id: str
+    amount: float = Field(..., gt=0)
+
+
+class PredictiveBudgetResponse(BaseModel):
+    velocity: OverallVelocityForecast
+    smart_allocations: List[DynamicBudgetRecommendation] = Field(default_factory=list)
+    currency: str = "INR"
+    generated_at: datetime = Field(default_factory=datetime.utcnow)

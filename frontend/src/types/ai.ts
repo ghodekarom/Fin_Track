@@ -22,3 +22,49 @@ export interface SpendingInsightsResponse {
   provider: string;
   is_cached: boolean;
 }
+
+// Phase 2: Predictive Overspend & Dynamic Budgeting Types
+export type VelocityRiskLevel = "safe" | "moderate" | "critical";
+
+export interface CategoryVelocityForecast {
+  category_id: string;
+  category_name: string;
+  budget_limit: number;
+  current_spent: number;
+  daily_burn_rate: number;
+  projected_month_end_spend: number;
+  projected_overage: number;
+  exhaustion_day: number | null;
+  risk_level: VelocityRiskLevel;
+  safe_daily_spend: number;
+}
+
+export interface OverallVelocityForecast {
+  overall_budget_limit: number | null;
+  current_spent: number;
+  daily_burn_rate: number;
+  projected_month_end_spend: number;
+  projected_overage: number;
+  days_elapsed: number;
+  days_remaining: number;
+  safe_daily_spend: number;
+  risk_level: VelocityRiskLevel;
+  risk_message: string;
+  category_forecasts: CategoryVelocityForecast[];
+}
+
+export interface DynamicBudgetRecommendation {
+  category_id: string;
+  category_name: string;
+  current_budget: number | null;
+  suggested_budget: number;
+  average_monthly_spend: number;
+  reasoning: string;
+}
+
+export interface PredictiveBudgetResponse {
+  velocity: OverallVelocityForecast;
+  smart_allocations: DynamicBudgetRecommendation[];
+  currency: string;
+  generated_at: string;
+}

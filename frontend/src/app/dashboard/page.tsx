@@ -19,6 +19,7 @@ import { PaymentModeChart } from "@/components/dashboard/PaymentModeChart";
 import { BudgetStatusCard } from "@/components/dashboard/BudgetStatusCard";
 import { BudgetForm } from "@/components/budgets/BudgetForm";
 import SmartInsightsCard from "@/components/dashboard/SmartInsightsCard";
+import PredictiveBudgetCard from "@/components/dashboard/PredictiveBudgetCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -96,6 +97,9 @@ export default function Dashboard() {
 
       {/* Row 1.5: AI Spending Insights & Savings Advisor */}
       <SmartInsightsCard />
+
+      {/* Row 1.6: Predictive Overspend & Dynamic Budgeting */}
+      <PredictiveBudgetCard onBudgetApplied={refetchBudgets} />
 
       {/* Row 2: Charts Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
