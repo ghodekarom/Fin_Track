@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, googleLogout } from "@react-oauth/google";
 import { Eye, EyeOff, Lock, Mail, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,6 +16,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Disable Google One Tap auto-select on mount so user always gets the account chooser
+  useEffect(() => {
+    try {
+      googleLogout();
+    } catch (e) {}
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +167,7 @@ export default function LoginPage() {
                 size="large"
                 text="signin_with"
                 width="100%"
+                auto_select={false}
               />
             </div>
           </div>

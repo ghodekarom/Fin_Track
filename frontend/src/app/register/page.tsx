@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, googleLogout } from "@react-oauth/google";
 import {
   Eye,
   EyeOff,
@@ -44,7 +44,14 @@ export default function RegisterPage() {
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Cooldown countdown timer for resending OTP
+  // Disable Google One Tap auto-select on mount so user always gets the account chooser
+  useEffect(() => {
+    try {
+      googleLogout();
+    } catch (e) {}
+  }, []);
+
+  // Resend cooldown timer effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (resendCooldown > 0) {
@@ -458,6 +465,7 @@ export default function RegisterPage() {
                 size="large"
                 text="signup_with"
                 width="100%"
+                auto_select={false}
               />
             </div>
           </div>

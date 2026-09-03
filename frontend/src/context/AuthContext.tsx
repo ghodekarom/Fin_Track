@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { apiClient, setAccessToken } from "@/lib/api-client";
 import { AuthResponse, RefreshResponse, User } from "@/types/auth";
+import { googleLogout } from "@react-oauth/google";
 
 interface AuthContextType {
   user: User | null;
@@ -119,6 +120,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await apiClient.post("/auth/logout");
     } finally {
+      try {
+        googleLogout();
+      } catch (e) {}
       setAccessToken(null);
       setUser(null);
     }
@@ -128,6 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await apiClient.post("/auth/logout-all");
     } finally {
+      try {
+        googleLogout();
+      } catch (e) {}
       setAccessToken(null);
       setUser(null);
     }
